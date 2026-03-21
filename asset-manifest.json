@@ -1,10 +1,11 @@
 {
   "files": {
-    "main.js": "/via51-nodo-central/static/js/main.bc4ff1ee.js",
+    "main.js": "/via51-nodo-central/static/js/main.08ad98bd.js",
+    "static/media/ceo_lima.png": "/via51-nodo-central/static/media/ceo_lima.09ac707dbde9db88c313.png",
     "index.html": "/via51-nodo-central/index.html",
-    "main.bc4ff1ee.js.map": "/via51-nodo-central/static/js/main.bc4ff1ee.js.map"
+    "main.08ad98bd.js.map": "/via51-nodo-central/static/js/main.08ad98bd.js.map"
   },
   "entrypoints": [
-    "static/js/main.bc4ff1ee.js"
+    "static/js/main.08ad98bd.js"
   ]
 }
