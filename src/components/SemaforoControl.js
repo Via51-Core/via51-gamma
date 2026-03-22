@@ -2,45 +2,40 @@ import React, { useState } from 'react';
 import { CAMPAIGN_DATA } from '../data/JS/candidato-config';
 
 const SemaforoControl = () => {
-    // ESTADO: ¿Está la interfaz Alfa activa?
     const [alfaActiva, setAlfaActiva] = useState(true);
 
-    const layout = {
-        width: '100vw', height: '100vh', position: 'fixed',
-        top: 0, left: 0, backgroundColor: '#000', fontFamily: 'Arial, sans-serif'
-    };
-
     return (
-        <div style={layout}>
-            {/* 1. FONDO (CENIT): Inmutable en el fondo */}
+        <div style={{ width: '100vw', height: '100vh', position: 'fixed', top: 0, left: 0, backgroundColor: '#000' }}>
+            
+            {/* CAPA 1: FONDO CENIT (SIEMPRE AL FONDO) */}
             <div style={{
                 position: 'absolute', width: '100%', height: '100%',
                 backgroundImage: `url(${CAMPAIGN_DATA.assets.heroImage})`,
                 backgroundSize: 'cover', backgroundPosition: 'center', zIndex: 1
             }} />
 
-            {/* 2. FLECHA DE RETROCESO: Aparece solo cuando Alfa se limpia */}
+            {/* CAPA 2: FLECHA DE RETROCESO (APARECE SI ALFA SE LIMPIA) */}
             {!alfaActiva && (
-                <button 
-                    onClick={() => setAlfaActiva(true)} // Retira flecha, restaura Alfa
+                <div 
+                    onClick={() => setAlfaActiva(true)} 
                     style={{
-                        position: 'fixed', top: '30px', left: '30px', zIndex: 9999,
+                        position: 'fixed', top: '30px', left: '30px', zIndex: 99999,
                         width: '60px', height: '60px', borderRadius: '50%',
                         backgroundColor: '#622d91', color: 'white', border: '3px solid white',
-                        fontSize: '35px', cursor: 'pointer', fontWeight: 'bold',
-                        boxShadow: '0 5px 20px rgba(0,0,0,0.6)', display: 'flex',
-                        justifyContent: 'center', alignItems: 'center'
+                        fontSize: '40px', cursor: 'pointer', fontWeight: 'bold',
+                        display: 'flex', justifyContent: 'center', alignItems: 'center',
+                        boxShadow: '0 0 25px rgba(0,0,0,0.8)'
                     }}
                 >
-                    ←
-                </button>
+                    &#8592;
+                </div>
             )}
 
-            {/* 3. CAPA INTERFAZ ALFA: Se limpia (desmonta) al pulsar un botón */}
+            {/* CAPA 3: INTERFAZ ALFA (BOTONES) */}
             {alfaActiva && (
                 <div style={{
-                    position: 'relative', zIndex: 10, width: '100%', height: '100%',
-                    backgroundColor: 'rgba(0,0,0,0.65)', display: 'flex',
+                    position: 'relative', zIndex: 100, width: '100%', height: '100%',
+                    backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex',
                     flexDirection: 'column', justifyContent: 'center', alignItems: 'center'
                 }}>
                     <h1 style={{ color: 'white', textAlign: 'center', fontSize: '2.5rem', marginBottom: '40px' }}>
@@ -51,12 +46,11 @@ const SemaforoControl = () => {
                         {CAMPAIGN_DATA.botones.map((btn) => (
                             <button 
                                 key={btn.id} 
-                                onClick={() => setAlfaActiva(false)} // Limpia Alfa, pone flecha
+                                onClick={() => setAlfaActiva(false)} // LIMPIA ALFA Y PONE FLECHA
                                 style={{ 
-                                    padding: '22px 55px', backgroundColor: btn.color, 
+                                    padding: '20px 60px', backgroundColor: btn.color, 
                                     color: 'white', border: 'none', borderRadius: '12px', 
-                                    fontWeight: 'bold', fontSize: '1.2rem', cursor: 'pointer',
-                                    boxShadow: '0 4px 15px rgba(0,0,0,0.4)'
+                                    fontWeight: 'bold', fontSize: '1.2rem', cursor: 'pointer'
                                 }}
                             >
                                 {btn.etiqueta.toUpperCase()}
