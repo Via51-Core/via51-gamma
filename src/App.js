@@ -1,7 +1,5 @@
 import React, { useState } from 'react'; // Eliminado useEffect por ahora
 import { CAMPAIGN_DATA } from './data/candidato-config';
-import PantallaEsceptico from './components/pantalla-esceptico'; 
-import PantallaConvencido from './components/pantalla-convencido';
 
 import './styles/App.css';
 //import './App.css';
