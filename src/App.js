@@ -22,10 +22,10 @@ const SemaforoControl = ({ onVote, datos }) => (
 
     {/* BLOQUE INFERIOR: Interpelación y Botones */}
     <div className="w-full flex flex-col items-center">
-      <p className="text-blue-400 italic text-lg mb-6 bg-black/20 px-4 py-1 rounded-full backdrop-blur-sm">
+      <p className="text-blue-400 italic text-lg mb-6 bg-black/40 backdrop-blur-md px-6 py-2 rounded-full border border-white/10">
         {datos.cenit.interpelacion}
       </p>
-
+      
       <div className="flex flex-wrap justify-center gap-4 px-6">
         {datos.botones.map((btn) => (
           <button 

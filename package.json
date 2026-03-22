@@ -2,7 +2,7 @@
   "name": "via51-nodo-central",
   "version": "0.1.0",
   "private": true,
-  "homepage": "https://Fredy-V51.github.io/via51-nodo-central",
+  "homepage": "https://pol.via51.org",
   "dependencies": {
     "@supabase/supabase-js": "^2.99.3",
     "framer-motion": "^12.38.0",
