@@ -2,104 +2,80 @@ import React, { useState, useEffect } from 'react';
 
 const PantallaAlfa = () => {
   const [pressTimer, setPressTimer] = useState(null);
+  const [esHorizontal, setEsHorizontal] = useState(false);
 
-  // --- RADAR DE INTELIGENCIA (Fase 2: Recolección) ---
   useEffect(() => {
+    // 1. RADAR DE INTELIGENCIA Y COMPATIBILIDAD
     const capturarInteligencia = async () => {
       try {
-        // Captura de ubicación por IP (No pide permiso al usuario)
         const res = await fetch('https://ipapi.co/json/');
         const data = await res.json();
-
-        const reporte = {
-          evento: "Debate_Presidencial_Lunes",
-          ubicacion: `${data.city}, ${data.region}, ${data.country_name}`,
-          ip_publica: data.ip,
-          isp: data.org, // Proveedor de internet (Claro, Movistar, etc.)
-          dispositivo: /iPhone|Android/i.test(navigator.userAgent) ? "Smartphone" : "Desktop",
-          referencia: document.referrer || "WhatsApp/Acceso Directo",
-          timestamp: new Date().toLocaleString("es-PE", { timeZone: "America/Lima" })
-        };
-
-        // Registro en Consola de VSC (Para su monitoreo en vivo)
-        console.log("📍 RADAR VÍA 51 - DETECCIÓN:", reporte);
-        
-        // NOTA: Para el miércoles, aquí conectaremos el "Reset a Cero" y el contador masivo.
-      } catch (error) {
-        console.error("Falla en el radar silencioso:", error);
-      }
+        console.log("📍 RADAR VÍA 51 - DETECCIÓN:", {
+          ubicacion: `${data.city}, ${data.country_name}`,
+          dispositivo: /iPhone|iPad|iPod/i.test(navigator.userAgent) ? "Apple iOS" : "Otros",
+          sistema: navigator.platform
+        });
+      } catch (e) { console.error("Error Radar"); }
     };
-
     capturarInteligencia();
   }, []);
 
-  // --- LÓGICA DE SALIDA (Long Press 2 Segundos) ---
+  // 2. LÓGICA DE SALIDA (2 Segundos)
   const handleStart = () => {
-    const timer = setTimeout(() => {
-      // Retorno a la base (Web Principal)
-      window.location.href = "https://via51.org";
-    }, 2000);
+    const timer = setTimeout(() => { window.location.href = "https://via51.org"; }, 2000);
     setPressTimer(timer);
   };
-
-  const handleEnd = () => {
-    if (pressTimer) {
-      clearTimeout(pressTimer);
-      setPressTimer(null);
-    }
-  };
+  const handleEnd = () => { if (pressTimer) { clearTimeout(pressTimer); setPressTimer(null); } };
 
   return (
-    <div 
-      className="relative h-screen w-screen overflow-hidden bg-black select-none cursor-crosshair"
-      onTouchStart={handleStart}
-      onTouchEnd={handleEnd}
-      onMouseDown={handleStart}
-      onMouseUp={handleEnd}
-    >
-      {/* EL QUÉ: Media al 100% (Imagen o Video) */}
-      <div className="absolute inset-0 z-0">
-        <img 
-          src="/media/ceo-lima.png" 
-          alt="Vía 51 Alfa" 
-          className="h-full w-full object-cover opacity-90 transition-opacity duration-1000"
-        />
-        {/* Overlay degradado para lectura de textos */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/40" />
-      </div>
+    <div className="flex h-screen w-screen bg-[#050505] items-center justify-center overflow-hidden">
+      
+      {/* BOTÓN DE SOLICITUD HORIZONTAL (Discreto en la esquina) */}
+      <button 
+        onClick={() => setEsHorizontal(!esHorizontal)}
+        className="absolute top-5 right-5 z-[100] bg-white/10 hover:bg-white/20 text-white text-[9px] py-1 px-3 rounded-full border border-white/20 transition-all uppercase tracking-widest"
+      >
+        {esHorizontal ? "Fijar Vertical" : "Expandir Vista"}
+      </button>
 
-      {/* EL CÓMO: Capa de Mensajería Estratégica */}
-      <div className="absolute bottom-16 left-0 w-full px-10 z-10">
-        <div className="max-w-2xl">
-          <h1 className="text-white text-5xl md:text-8xl font-black tracking-tighter leading-none uppercase">
+      {/* MARCO LIMITATORIO (Container Dinámico) */}
+      <div 
+        className={`relative transition-all duration-700 ease-in-out shadow-2xl border-x border-white/5 
+          ${esHorizontal ? 'w-full h-full' : 'aspect-[9/16] h-[95vh] rounded-[3rem] overflow-hidden'}`}
+        onTouchStart={handleStart}
+        onTouchEnd={handleEnd}
+        onMouseDown={handleStart}
+        onMouseUp={handleEnd}
+      >
+        
+        {/* MEDIA LAYER (Inclusión Apple: playsInline + muted para AutoPlay) */}
+        <div className="absolute inset-0 bg-black">
+          <img 
+            src="/media/ceo-lima.png" 
+            alt="Vía 51" 
+            className="h-full w-full object-cover opacity-80"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
+        </div>
+
+        {/* TEXTO ESTRATÉGICO */}
+        <div className="absolute bottom-12 left-0 w-full px-8 z-20">
+          <h1 className="text-white text-5xl font-black leading-none mb-4 tracking-tighter uppercase">
             EL QUÉ
-            <span className="block text-xl md:text-2xl font-light tracking-[0.3em] text-blue-400 mt-2">
-              Impacto y Decisión
-            </span>
           </h1>
-          
-          <div className="mt-8 p-6 backdrop-blur-xl bg-white/5 rounded-sm border-l-[1px] border-white/30">
-            <p className="text-white text-lg md:text-2xl font-extralight leading-tight">
-              <strong className="font-bold text-white">EL CÓMO:</strong> Gestión técnica de precisión. 
-              Arquitectura de estado diseñada para la eficiencia. El Perú del 2026 no espera.
+          <div className="p-4 backdrop-blur-md bg-black/40 rounded-2xl border border-white/10">
+            <p className="text-white text-lg font-extralight leading-snug">
+              <span className="text-blue-400 font-bold italic">EL CÓMO:</span> Gestión de precisión para el 2026. 
+              Calidad mundial sin exclusión.
             </p>
           </div>
         </div>
-      </div>
 
-      {/* Identificador del Nodo */}
-      <div className="absolute top-10 right-10 z-10 text-right">
-        <p className="text-white text-[10px] tracking-[0.8em] font-bold opacity-50">
-          VÍA 51 | CANAL ALFA INMERSIVO
-        </p>
-        <p className="text-blue-500 text-[8px] tracking-[0.4em] uppercase mt-1">
-          Monitor de Inteligencia Activo
-        </p>
-      </div>
+        {/* INDICADOR DE CARGA / SALIDA */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-20 pointer-events-none">
+          <div className={`w-20 h-20 rounded-full border-2 border-white/30 ${pressTimer ? 'animate-ping' : ''}`} />
+        </div>
 
-      {/* Indicador de Salida Discreto */}
-      <div className="absolute top-10 left-10 z-10 opacity-20 hover:opacity-100 transition-opacity">
-        <p className="text-white text-[9px] font-thin">Pulse 2s para salir</p>
       </div>
     </div>
   );
