@@ -20,7 +20,7 @@ const Via51 = () => {
 
     // --- AJUSTE TÁCTICO DE AUDIO ---
     // Si seleccionamos el botón que lleva a Palacio de Gobierno (VERDE),
-    // saltamos el silencio inicial. Ajuste el 2.5 según sea necesario.
+    // saltamos el silencio inicial. Ajuste el 7.5 según sea necesario.
     if (tipo === 'VERDE') {
       nuevoAudio.currentTime = 7.5; 
     }

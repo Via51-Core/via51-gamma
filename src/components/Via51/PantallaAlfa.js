@@ -1,64 +1,60 @@
-import React from 'react';
-import fondoCeo from '../../assets/ceo-lima.png'; 
+import React, { useState, useEffect } from 'react';
 
-const PantallaAlfa = ({ onSeleccionar }) => {
-  const TEXTO_APOYO_BOTON = "ERES DE LOS QUE SABEN"; 
+const PantallaAlfa = ({ alSeleccionar, config }) => {
+  const [pressed, setPressed] = useState(false);
+  let pressTimer;
 
-  const botones = [
-    { tipo: 'VERDE', color: 'green', titulo: 'INDISCUTIBLE' },
-    { tipo: 'AMBAR', color: 'yellow', titulo: 'PUEDE SER' },
-    { tipo: 'ROJO', color: 'red', titulo: 'DIFÍCIL' },
-  ];
+  // Lógica de Salida: Long Press 2 segundos
+  const handleStart = () => {
+    pressTimer = setTimeout(() => {
+      window.location.href = "https://via51.org"; // O la ruta de retorno
+    }, 2000);
+  };
+
+  const handleEnd = () => clearTimeout(pressTimer);
 
   return (
     <div 
-      className="absolute inset-0 flex flex-col items-center hero-bg overflow-hidden"
-      style={{ backgroundImage: `url(${fondoCeo})` }}
+      className="relative h-screen w-screen overflow-hidden bg-black select-none"
+      onTouchStart={handleStart}
+      onTouchEnd={handleEnd}
+      onMouseDown={handleStart}
+      onMouseUp={handleEnd}
     >
-      <div className="absolute inset-0 bg-black/25" /> 
-      
-      {/* Reducimos el pt-8 a pt-4 para subir un poco el titular y alejarlo de la cabeza */}
-      <div className="relative z-10 flex flex-col items-center h-full w-full pt-4 pb-12">
-        
-        {/* BLOQUE TITULAR SUPERIOR: Subido para no tocar la coronilla */}
-        <div className="text-center animate-fade-in-down px-4">
-          <p className="text-gray-200 font-light text-[12px] tracking-[0.6em] uppercase mb-1 opacity-90">
-            EL ÚLTIMO EN LA CÉDULA DE VOTACIÓN
-          </p>
-          <h1 className="text-white text-3xl md:text-5xl lg:text-5xl font-black tracking-tighter uppercase whitespace-nowrap">
-            PRIMERO EN LAS CALIFICACIONES
-          </h1>
-        </div>
+      {/* EL QUÉ: Media al 100% */}
+      <div className="absolute inset-0 z-0">
+        <video 
+          autoPlay 
+          muted 
+          loop 
+          playsInline 
+          className="h-full w-full object-cover opacity-80"
+        >
+          <source src="/media/ceo-lima-v2.mp4" type="video/mp4" />
+          {/* Fallback a imagen si no hay video */}
+          <img src="/media/ceo-lima.png" alt="Vía 51 Alfa" className="h-full w-full object-cover" />
+        </video>
+      </div>
 
-        {/* BLOQUE INFERIOR: Bajado al máximo hacia la mesa */}
-        <div className="mt-auto w-full flex flex-col items-center gap-4">
+      {/* EL CÓMO: Capa de Mensajería Discreta/Destacada */}
+      <div className="absolute bottom-10 left-0 w-full px-8 z-10">
+        <div className="max-w-xl animate-fade-in-up">
+          <h1 className="text-white text-5xl md:text-7xl font-black leading-tight drop-shadow-2xl">
+            EL QUÉ <span className="block text-2xl font-thin opacity-70 mt-2 text-blue-400">Impacto Inmediato</span>
+          </h1>
           
-          {/* Interpelación: Encima de los botones y con espaciado elegante */}
-          <div className="bg-black/50 backdrop-blur-md border border-white/10 px-6 py-2 rounded-full mb-2">
-            <p className="text-gray-300 italic text-xs md:text-sm tracking-wide">
-              Ante la evidencia... ¿Tú qué piensas? ¿Cómo te consideras?
+          <div className="mt-6 p-4 backdrop-blur-md bg-white/10 rounded-lg border-l-4 border-blue-500">
+            <p className="text-white text-lg md:text-xl font-light leading-relaxed">
+              <span className="font-bold text-blue-300">EL CÓMO:</span> Aquí se detalla la propuesta técnica. 
+              Elegancia, precisión y gestión de calidad mundial para el Perú del 2026.
             </p>
           </div>
-
-          {/* Botones: Bajados con pb-12 en el contenedor padre */}
-          <div className="contenedor-semaforo px-6 scale-90 md:scale-100">
-            {botones.map((btn) => (
-              <button
-                key={btn.tipo}
-                onClick={() => onSeleccionar(btn.tipo)}
-                className={`boton-ceo border-${btn.color}-500/30 hover:border-${btn.color}-500 transition-all duration-300 shadow-2xl`}
-              >
-                <span className={`text-${btn.color}-500 font-black text-2xl block mb-1 tracking-tighter uppercase`}>
-                  {btn.titulo}
-                </span>
-                <p className="text-[9px] text-gray-400 font-bold uppercase tracking-[0.3em]">
-                  {TEXTO_APOYO_BOTON}
-                </p>
-              </button>
-            ))}
-          </div>
         </div>
+      </div>
 
+      {/* Marca de Agua Discreta */}
+      <div className="absolute top-8 right-8 z-10 opacity-40">
+        <p className="text-white text-xs tracking-[0.5em] font-bold">VÍA 51 | NODO ALFA</p>
       </div>
     </div>
   );
