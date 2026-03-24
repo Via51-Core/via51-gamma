@@ -1,20 +1,34 @@
 import { NextResponse } from 'next/server';
 
 export function middleware(request) {
-  const url = request.nextUrl;
-  const hostname = request.headers.get('host');
+  const host = request.headers.get('host');
+  const url = request.nextUrl.clone();
 
-  // Definimos los slugs basados en el subdominio
-  const tenants = {
-    'pol.via51.org': 'campana-presidencial',
-    'fj.via51.org': 'inmobiliaria-servicios',
-    'makilovers.via51.org': 'restaurante-maki',
-  };
+  // 1. EJE POLÍTICO (via51.org y pol.via51.org)
+  if (host.includes('pol.via51.org') || host === 'via51.org') {
+    // Si no tienes una carpeta específica, envíalo a la raíz
+    // Pero si quieres que cargue la data de 'pol', forzamos el parámetro
+    url.pathname = '/'; 
+    url.searchParams.set('slug', 'pol');
+    return NextResponse.rewrite(url);
+  }
 
-  const tenantSlug = tenants[hostname] || 'default';
+  // 2. PACHA (pacha.via51.org)
+  if (host.includes('pacha')) {
+    url.pathname = '/admin/pacha';
+    return NextResponse.rewrite(url);
+  }
 
-  // Reescribimos la ruta internamente para que el motor sepa a quién servir
-  url.pathname = `/_tenant/${tenantSlug}${url.pathname}`;
-  
-  return NextResponse.rewrite(url);
+  // 3. EJE PRODUCTIVO (fj.via51.org)
+  if (host.includes('fj.')) {
+    url.pathname = '/';
+    url.searchParams.set('slug', 'fj');
+    return NextResponse.rewrite(url);
+  }
+
+  return NextResponse.next();
 }
+
+export const config = {
+  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
+};
