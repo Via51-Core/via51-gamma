@@ -1,8 +1,8 @@
 "use client";
 import React, { useState, useEffect } from 'react';
 
-const PantallaAlfa = ({ data, host }) => {
-  const [visitante, setVisitante] = useState({ city: 'RADAR...', ip: '' });
+const PantallaAlfa = ({ data }) => {
+  const [visitante, setVisitante] = useState({ city: 'LOCALIZANDO...', ip: '0.0.0.0' });
 
   useEffect(() => {
     const capturarInteligencia = async () => {
@@ -11,7 +11,7 @@ const PantallaAlfa = ({ data, host }) => {
         const info = await res.json();
         setVisitante({ city: info.city, ip: info.ip });
       } catch (e) {
-        setVisitante({ city: 'LIMA', ip: '181.233.24.229' });
+        setVisitante({ city: 'LIMA', ip: 'CONEXIÓN SEGURA' });
       }
     };
     capturarInteligencia();
