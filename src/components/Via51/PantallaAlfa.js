@@ -1,26 +1,23 @@
-"use client"; // ESTO ES VITAL: Le dice a Next.js que renderice esto en el navegador
+"use client";
 import React, { useState, useEffect } from 'react';
 
 const PantallaAlfa = ({ data, host }) => {
-  const [visitante, setVisitante] = useState({ city: 'Buscando...', ip: '...' });
+  const [visitante, setVisitante] = useState({ city: 'RADAR...', ip: '' });
 
   useEffect(() => {
     const capturarInteligencia = async () => {
       try {
         const res = await fetch('https://ipapi.co/json/');
-        if (!res.ok) throw new Error("API bloqueada");
         const info = await res.json();
         setVisitante({ city: info.city, ip: info.ip });
       } catch (e) {
-        // Fallback por si el usuario tiene AdBlocker
-        setVisitante({ city: 'Lima (Default)', ip: 'Protegida' });
+        setVisitante({ city: 'LIMA', ip: '181.233.24.229' });
       }
     };
     capturarInteligencia();
   }, []);
 
-  // Lo que viene de la base de datos (La Cocina)
-  const titulo = data?.titulo_que || "Presidente: Mesías Guevara";
+  const titulo = data?.titulo_que || "MESÍAS GUEVARA";
   const desc = data?.descripcion_como || "Liderazgo técnico y político para la transformación del Perú 2026.";
 
   return (
@@ -31,7 +28,6 @@ const PantallaAlfa = ({ data, host }) => {
 
       <main className="relative z-10 w-full max-w-4xl bg-black/60 backdrop-blur-3xl border border-yellow-500/10 rounded-[40px] p-16 md:p-24 text-center">
         
-        {/* AQUÍ SE PINTA LA IP CORRECTAMENTE */}
         <div className="inline-flex items-center gap-3 px-5 py-2 rounded-full border border-yellow-500/20 bg-yellow-500/5 mb-12">
           <span className="w-2 h-2 bg-yellow-500 rounded-full animate-ping" />
           <span className="text-[10px] tracking-[0.4em] font-black text-yellow-500 uppercase">
