@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 export function middleware(request) {
-  const host = request.headers.get('host');
+  const host = request.headers.get('host') || '';
   const url = request.nextUrl.clone();
 
   if (host.includes('via51.org') || host.includes('pol.via51.org')) {
@@ -14,4 +14,4 @@ export function middleware(request) {
 
 export const config = {
   matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
-};gi
+};
