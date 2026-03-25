@@ -1,16 +1,16 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import PantallaAlfa from './components/Via51/PantallaAlfa';
-import Pacha from './pages/Pacha'; // Asegúrate de que el archivo existe en src/pages/
+import Pacha from './pages/Pacha'; 
 
 function App() {
   return (
     <Router>
       <Routes>
-        {/* La mesa pública */}
+        {/* URL normal y subdominios: muestra la web pública */}
         <Route path="/" element={<PantallaAlfa />} />
         
-        {/* El panel de edición */}
+        {/* URL /pacha: muestra el panel de edición */}
         <Route path="/pacha" element={<Pacha />} />
       </Routes>
     </Router>
