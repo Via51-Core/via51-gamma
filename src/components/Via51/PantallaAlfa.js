@@ -1,4 +1,3 @@
-"use client";
 import React, { useState, useEffect } from 'react';
 
 export default function PantallaAlfa({ data }) {
@@ -8,7 +7,7 @@ export default function PantallaAlfa({ data }) {
     fetch('https://ipapi.co/json/')
       .then(res => res.json())
       .then(info => setVisitante({ city: info.city, ip: info.ip }))
-      .catch(() => setVisitante({ city: 'LIMA', ip: '181.233.24.229' }));
+      .catch(() => setVisitante({ city: 'LIMA', ip: 'RADAR ACTIVO' }));
   }, []);
 
   return (
