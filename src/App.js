@@ -3,14 +3,16 @@ import PantallaAlfa from './components/Via51/PantallaAlfa';
 import Pacha from './pages/Pacha'; 
 
 function App() {
-  // Detectamos si el usuario entró por pacha.via51.org o via51.org/pacha
-  const isPacha = window.location.hostname.includes('pacha') || 
-                  window.location.pathname.includes('pacha');
+  // El sistema detecta si estás en el subdominio de edición
+  const hostname = window.location.hostname;
+  const esPanelControl = hostname.includes('pacha');
 
+  // Si el dominio es pacha.via51.org, entrega el editor. 
+  // Si es via51.org o pol.via51.org, entrega la web pública.
   return (
-    <div className="App">
-      {isPacha ? <Pacha /> : <PantallaAlfa />}
-    </div>
+    <>
+      {esPanelControl ? <Pacha /> : <PantallaAlfa />}
+    </>
   );
 }
 
