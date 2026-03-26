@@ -1,6 +1,18 @@
-import { createClient } from '@supabase/supabase-client';
+import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = 'https://ibhhzgtxaqwdykedhtvk.supabase.co';
-const supabaseKey = 'sb_publishable_Aicdv3GPUOAdE04R9YVHpw_dA18Knik';
+// Sincronización exacta con tu archivo .env
+const supabaseUrl = import.meta.env.VITE_CORE_DATA_URL;
+const supabaseAnonKey = import.meta.env.VITE_CORE_PUBLIC_TOKEN;
 
-export const supabase = createClient(supabaseUrl, supabaseKey);
+// Validación de arranque en consola
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error("❌ ERROR CRÍTICO: El motor Gamma no detecta las variables en el archivo .env");
+}
+
+// Inicialización del Cliente Único
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+// Alias para compatibilidad con el resto del sistema
+export const dataClient = supabase;
+
+export default supabase;
