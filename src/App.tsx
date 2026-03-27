@@ -1,43 +1,26 @@
-import React from 'react';
-// Importamos el hook con nombre neutro (deberás renombrar el archivo físico a useSystemStream.js más adelante)
-import { useSystemStream } from './layers/shared/hooks/useSystemStream'; 
-import PillarOrchestrator from './layers/core/PillarOrchestrator';
-import AlphaMutationView from './layers/alfa/AlphaMutationView';
+// src/App.tsx
+import React, { useState } from 'react';
+import { NodeController } from './components/NodeController';
+import './styles/App.css';
 
-function App() {
-  // El hook ahora devuelve el estado global del motor (config) y los datos
-  const { data, loading, config } = useSystemStream();
+const App: React.FC = () => {
+  // Estado que guarda el ID del nodo actual (Inicia en '0' = Vía51)
+  const [currentNodeId, setCurrentNodeId] = useState<string>('0');
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="text-blue-500 font-bold tracking-[0.3em] animate-pulse text-xs uppercase">
-          Gamma Engine: Sincronizando Núcleo...
-        </div>
-      </div>
-    );
-  }
-
-  // LÓGICA DE CONMUTACIÓN DEL HOLDING
-  // Si el motor detecta un evento crítico (Modo Coyuntura), Alfa toma el control total.
-  if (config?.is_critical_mode) {
-    return (
-      <main className="mode-critical">
-        <AlphaMutationView eventData={data?.critical_event} />
-      </main>
-    );
-  }
-
-  // MODO ESTÁNDAR: Visualización de los Tres Pilares del Desarrollo Nacional
   return (
-    <main className="mode-standard">
-      <PillarOrchestrator 
-        political={data?.pillars?.political}
-        social={data?.pillars?.social}
-        productive={data?.pillars?.productive}
+    <div className="via51-global-wrapper">
+      {/* El NodeController toma el mando basándose en el ID actual */}
+      <NodeController 
+        nodeId={currentNodeId} 
+        onNavigate={(nextId) => setCurrentNodeId(nextId)} 
       />
-    </main>
+      
+      {/* Barra de estado inferior opcional (Calidad Mundial) */}
+      <footer className="system-status">
+        STATUS: ONLINE | TERMINAL_ID: NODE_CENTRAL | LEVEL: {currentNodeId}
+      </footer>
+    </div>
   );
-}
+};
 
 export default App;

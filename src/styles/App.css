@@ -1,57 +1,32 @@
-.app-container { min-height: 100vh; background-size: cover; }
-
-.contenedor-semaforo {
-  position: absolute;
-  top: 70%; /* Ajuste según la posición de la mesa en su pantalla */
-  width: 100%;
-  display: flex;
-  justify-content: center;
-  gap: 20px;
+.node-shell {
+  width: 100vw; height: 100vh;
+  background-size: cover; background-position: center;
+  display: flex; align-items: center; justify-content: center;
 }
 
-.boton-accion {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  backdrop-filter: blur(5px);
-  padding: 20px;
-  border-radius: 12px;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.boton-accion:hover {
-  background: rgba(255, 255, 255, 0.2);
-  transform: translateY(-5px);
-}
-
-.boton-ceo {
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(15px);
-  padding: 1.2rem 1.5rem;
-  min-width: 220px;
-  border-width: 1px;
-  border-style: solid;
-  transition: all 0.3s ease;
+.overlay {
+  background: rgba(0, 20, 0, 0.85);
+  border: 2px solid #00ff00;
+  padding: 40px; color: #00ff00;
   text-align: center;
+  box-shadow: 0 0 20px #00ff00;
 }
 
-.boton-ceo span {
-  letter-spacing: 0.15em;
+.engine-container {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
 }
 
-.boton-ceo:hover {
-  transform: translateY(-5px);
-  background: rgba(255, 255, 255, 0.05);
+.engine-box {
+  border: 1px solid #00ff00; padding: 20px;
 }
 
-@keyframes fade-in-down {
-  from { opacity: 0; transform: translateY(-20px); }
-  to { opacity: 1; transform: translateY(0); }
+.digital-display {
+  font-size: 3rem; color: #0f0; text-shadow: 0 0 10px #0f0;
 }
 
-.hero-bg {
-  background-position: top center; /* Prioriza que se vea la cabeza siempre */
-  background-size: cover;
+button {
+  background: transparent; border: 1px solid #0f0; color: #0f0;
+  padding: 10px 20px; cursor: pointer; margin: 10px;
 }
 
-.animate-fade-in-down { animation: fade-in-down 1s ease-out; }
+button:hover { background: #0f0; color: #000; }
