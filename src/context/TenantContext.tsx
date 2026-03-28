@@ -1,4 +1,4 @@
-// Ubicación: src/context/TenantContext.tsx
+// src/context/TenantContext.tsx
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { SCHEMA } from '../lib/constants';
@@ -6,9 +6,8 @@ import { SCHEMA } from '../lib/constants';
 interface TenantConfig {
   id: string;
   slug: string;
-  name: string;
   nodeTree: any;
-  assets?: { logo: string; favicon: string; };
+  config: any;
 }
 
 interface TenantContextType {
@@ -32,14 +31,12 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const syncSystem = async () => {
       try {
         const host = window.location.hostname;
-        const isLocal = host === 'localhost' || host === '127.0.0.1';
-        
         // Resolución de SLUG (Alfa I/O)
-        const slug = isLocal 
-          ? (import.meta.env.VITE_DEV_CLIENT_SLUG || 'default') 
+        const slug = (host === 'localhost' || host === '127.0.0.1')
+          ? (import.meta.env.VITE_DEV_CLIENT_SLUG || 'mesias') 
           : host.split('.')[0];
 
-        // Consulta directa a la tabla sys_registry en esquema public
+        // Consulta limpia a esquema public
         const { data, error: dbError } = await supabase
           .from(SCHEMA.TABLES.ORGANIZATIONS)
           .select('*')
@@ -49,26 +46,17 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         if (dbError) throw dbError;
 
         if (data) {
-          const tree = data[SCHEMA.DATA_KEYS.TREE];
-          const config = data[SCHEMA.DATA_KEYS.CONFIG];
-          const theme = config?.[SCHEMA.DATA_KEYS.THEME] || { primary: '#3b82f6', secondary: '#1e293b' };
-          const assets = config?.[SCHEMA.DATA_KEYS.ASSETS];
-
-          // Inyección Antigravity de Estilos
-          document.documentElement.style.setProperty('--v51-primary', theme.primary);
-          
           setTenant({
             id: data.id,
             slug: data.slug,
-            name: data.slug.toUpperCase(),
-            nodeTree: tree,
-            assets
+            nodeTree: data[SCHEMA.DATA_KEYS.TREE],
+            config: data[SCHEMA.DATA_KEYS.CONFIG]
           });
         } else {
-          setError(`REGISTRO_NO_ENCONTRADO: El slug [${slug}] no existe en la base de datos.`);
+          setError(`REGISTRO_NO_ENCONTRADO: ${slug}`);
         }
       } catch (err: any) {
-        setError(`FALLO_CONEXION: ${err.message || 'Error de red con Supabase'}`);
+        setError(`FALLO_KERNEL: ${err.message}`);
       } finally {
         setLoading(false);
       }

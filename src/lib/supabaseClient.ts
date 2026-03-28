@@ -1,11 +1,16 @@
 // src/lib/supabaseClient.ts
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js'; //
 
-const supabaseUrl = import.meta.env.VITE_DATA_GATEWAY_URL || import.meta.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_DATA_GATEWAY_TOKEN || import.meta.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+// Verificación de seguridad para depurar en consola
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error("ERROR: Credenciales de Supabase no detectadas en .env");
+}
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   db: {
-    schema: 'sys' // <-- Esto le indica a Supabase que use nuestra capa de abstracción
+    schema: 'public' 
   }
-});
+}); //

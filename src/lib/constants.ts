@@ -1,16 +1,16 @@
-// Ubicación: src/lib/constants.ts
-// Motor de Identidad V51 - Sintonía Antigravity
+// src/lib/constants.ts
+// Motor de Identidad - Sintonía Antigravity
 
 export const SCHEMA = {
   TABLES: {
-    // Apuntamos a la tabla en 'public' con prefijo de sistema
+    // Usamos el nombre plano para que Supabase busque en 'public' por defecto
     ORGANIZATIONS: 'sys_registry', 
     TELEMETRY: 'sys_events' 
   },
   DATA_KEYS: {
-    // Sintonizado con tu Schema Visualizer de Supabase
-    TREE: 'node_tree',
-    CONFIG: 'configuracion_json',
+    // Sintonizado con las columnas físicas de tu base de datos
+    TREE: 'node_tree',           // La columna que contiene el JSON fractal
+    CONFIG: 'configuracion_json', // Configuración de motor (Alfa/Beta/Gamma)
     THEME: 'theme',
     ASSETS: 'assets'
   }

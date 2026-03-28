@@ -24,7 +24,7 @@ const MainLayout: React.FC = () => {
       <div className="flex h-screen items-center justify-center bg-red-950 text-red-200 p-8 text-center">
         <div>
           <h2 className="text-xl font-bold mb-2">CRITICAL_SYSTEM_ERROR</h2>
-          <p className="opacity-70 text-sm">Registro de identidad no detectado en sys.registry.</p>
+          <p className="opacity-70 text-sm">Registro de identidad no detectado en sys_registry.</p>
           <p className="mt-4 text-xs font-mono">Verifique SLUG en .env y conexión Supabase.</p>
         </div>
       </div>
