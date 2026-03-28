@@ -1,18 +1,11 @@
+// src/lib/supabaseClient.ts
 import { createClient } from '@supabase/supabase-js';
 
-// Sincronización exacta con tu archivo .env
-const supabaseUrl = import.meta.env.VITE_CORE_DATA_URL;
-const supabaseAnonKey = import.meta.env.VITE_CORE_PUBLIC_TOKEN;
+const supabaseUrl = import.meta.env.VITE_DATA_GATEWAY_URL || import.meta.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_DATA_GATEWAY_TOKEN || import.meta.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
 
-// Validación de arranque en consola
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.error("❌ ERROR CRÍTICO: El motor Gamma no detecta las variables en el archivo .env");
-}
-
-// Inicialización del Cliente Único
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
-// Alias para compatibilidad con el resto del sistema
-export const dataClient = supabase;
-
-export default supabase;
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  db: {
+    schema: 'sys' // <-- Esto le indica a Supabase que use nuestra capa de abstracción
+  }
+});

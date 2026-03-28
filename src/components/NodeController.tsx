@@ -1,52 +1,32 @@
-import React from 'react';
-import { nodeTree } from '../data/nodeTree';
-import { CaptureEngine } from '../engines/CaptureEngine';
-import { RenderEngine } from '../engines/RenderEngine';
+// Ubicación: src/components/NodeController.tsx (Resumen de lógica)
 
-interface Props {
-  nodeId: string;
-  onNavigate: (id: string) => void;
-}
+export const NodeController: React.FC<{ nodeId: string }> = ({ nodeId }) => {
+  const { tenant } = useTenant();
+  
+  // Extraemos el nodo actual del mapa que subimos a Supabase
+  const currentNode = tenant?.nodeTree?.[nodeId];
 
-export const NodeController: React.FC<Props> = ({ nodeId, onNavigate }) => {
-  const node = nodeTree[nodeId];
-
-  // Si el nodo no existe en nodeTree.ts, mostramos un error elegante
-  if (!node) return <div style={{color: '#f00', padding: '20px'}}>Error: Nodo {nodeId} no definido.</div>;
+  if (!currentNode) return <div>Nodo no encontrado en el Archivador.</div>;
 
   return (
-    <div className="node-shell" style={{ backgroundImage: `url(/assets/${node.background})` }}>
-      <div className="overlay">
-        <h1>{node.label}</h1>
-        
-        {node.type === 'folder' ? (
-          <div className="nav-menu">
-            {node.children?.map(childId => (
-              <button key={childId} onClick={() => onNavigate(childId)}>
-                ACCEDER A {nodeTree[childId]?.label || childId}
-              </button>
-            ))}
-            {nodeId !== '0' && (
-              <button className="btn-back" onClick={() => onNavigate('0')}>
-                VOLVER AL NODO CENTRAL
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="engine-container">
-            <RenderEngine 
-              capaId={node.id} 
-              variableName={node.variable!} 
-              tituloMonitor="ESTADO ACTUAL" 
-            />
-            <CaptureEngine 
-              capaId={node.id} 
-              variableName={node.variable!} 
-              tituloFormulario="INYECCIÓN ALPHA" 
-            />
-            <button onClick={() => onNavigate('1.2')}>CERRAR MONITOR</button>
-          </div>
+    <div className="p-6">
+      <h1 className="text-xl font-bold mb-4">{currentNode.data.label}</h1>
+      
+      <div className="grid grid-cols-1 gap-4">
+        {/* Si es un nodo de audio, mostramos el reproductor */}
+        {currentNode.type === 'audio_node' && (
+          <audio controls src={currentNode.data.src} className="w-full" />
         )}
+
+        {/* Si tiene hijos, renderizamos los botones de navegación (Nivel N) */}
+        {currentNode.children?.map((childId: string) => (
+          <button 
+            key={childId}
+            className="p-4 bg-slate-100 rounded border hover:bg-slate-200"
+          >
+            Abrir Gaveta: {tenant.nodeTree[childId]?.data.label}
+          </button>
+        ))}
       </div>
     </div>
   );

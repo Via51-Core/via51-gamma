@@ -1,5 +1,8 @@
+// src/engines/CaptureEngine.tsx
 import React, { useState } from 'react';
-import { supabase } from '../lib/supabaseClient'; // Ruta verificada según tu VS Code
+import { supabase } from '../lib/supabaseClient'; 
+import { SCHEMA } from '../lib/constants';
+import { useTenant } from '../context/TenantContext';
 
 interface CaptureProps {
   capaId: string;
@@ -10,17 +13,29 @@ interface CaptureProps {
 export const CaptureEngine: React.FC<CaptureProps> = ({ capaId, variableName, tituloFormulario }) => {
   const [valor, setValor] = useState('');
   const [loading, setLoading] = useState(false);
+  
+  // Extraemos la identidad del Tenant actual del Holding
+  const { tenant } = useTenant();
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!tenant) {
+      alert("Error: No se ha detectado una organización válida para esta operación.");
+      return;
+    }
+
     setLoading(true);
     
+    // Inyectamos la mutación utilizando la vista profesional 'telemetry_logs'
+    // Incluimos el tenant_id para mantener el aislamiento de datos por cliente
     const { error } = await supabase
-      .from('via51_mutations')
+      .from(SCHEMA.TABLES.TELEMETRY)
       .insert({ 
         capa_id: capaId, 
         variable_name: variableName, 
-        valor: parseFloat(valor) 
+        valor: parseFloat(valor),
+        tenant_id: tenant.id // <--- Vínculo de identidad del Holding
       });
 
     if (error) {

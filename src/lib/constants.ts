@@ -1,16 +1,17 @@
-// src/lib/constants.ts
+// Ubicación: src/lib/constants.ts
+// Motor de Identidad V51 - Sintonía Antigravity
 
-/**
- * MAPPING DE CLASE MUNDIAL
- * Centralizamos las referencias para evitar 'Hard-Coding'
- */
-export const TABLES = {
-  // Nombres profesionales (English Standard)
-  TELEMETRY: 'telemetry_logs',
-  ORGANIZATIONS: 'organizations',
-  PROFILES: 'identity_profiles',
-  RECORDS: 'entry_records',
-  
-  // Legacy (Para referencia o fallback temporal)
-  LEGACY_MUTATIONS: 'via51_mutations'
-};
+export const SCHEMA = {
+  TABLES: {
+    // Apuntamos a la tabla en 'public' con prefijo de sistema
+    ORGANIZATIONS: 'sys_registry', 
+    TELEMETRY: 'sys_events' 
+  },
+  DATA_KEYS: {
+    // Sintonizado con tu Schema Visualizer de Supabase
+    TREE: 'node_tree',
+    CONFIG: 'configuracion_json',
+    THEME: 'theme',
+    ASSETS: 'assets'
+  }
+} as const;
