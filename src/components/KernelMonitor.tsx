@@ -1,97 +1,102 @@
+// ==========================================
+// PATH: src/components/KernelMonitor.tsx
+// COMPONENT: Advanced System Health Monitor
+// STANDARD: Technical English / Real-time Telemetry
+// ==========================================
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { SCHEMA } from '../lib/constants';
+import { useTenant } from '../context/TenantContext';
 
-/**
- * KERNEL MONITOR - DIAGNÓSTICO DE SISTEMA
- * Monitorea en tiempo real la conexión con el núcleo de la base de datos (Supabase).
- * Verifica la existencia de identidad en [sys_registry] y actividad en [sys_events].
- */
 export const KernelMonitor: React.FC = () => {
-  const [status, setStatus] = useState<{ 
-    registry: 'loading' | 'ok' | 'error'; 
-    events: number | null 
-  }>({
-    registry: 'loading',
-    events: null
+  const { tenant } = useTenant();
+  const [telemetry, setTelemetry] = useState({
+    total_events: 0,
+    geo_traces: 0,
+    registry_count: 0,
+    last_event: 'AWAITING_SIGNAL'
   });
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const sync_telemetry = async () => {
+    if (!tenant?.id) return;
+
+    // 1. Count Total Events (Generic Telemetry)
+    const { count: events } = await supabase
+      .from(SCHEMA.TABLES.TELEMETRY)
+      .select('*', { count: 'exact', head: true })
+      .eq('tenant_id', tenant.id);
+
+    // 2. Count Geo Traces (Specific External Hits)
+    const { count: traces } = await supabase
+      .from(SCHEMA.TABLES.TELEMETRY)
+      .select('*', { count: 'exact', head: true })
+      .eq('tenant_id', tenant.id)
+      .eq('event_type', 'GEO_TRACE');
+
+    // 3. Count Registry Objects (Internal Entries)
+    const { count: registry } = await supabase
+      .from('sys_registry')
+      .select('*', { count: 'exact', head: true });
+
+    setTelemetry({
+      total_events: events || 0,
+      geo_traces: traces || 0,
+      registry_count: registry || 0,
+      last_event: new Date().toLocaleTimeString()
+    });
+  };
 
   useEffect(() => {
-    const probeKernel = async () => {
-      try {
-        // 1. Prueba de conexión al Registro de Identidad (Tabla sys_registry)
-        // Nota: SCHEMA.TABLES.ORGANIZATIONS debe apuntar a 'sys_registry' en constants.ts
-        const { error: regError } = await supabase
-          .from(SCHEMA.TABLES.ORGANIZATIONS)
-          .select('id')
-          .limit(1)
-          .maybeSingle();
+    sync_telemetry();
 
-        if (regError) throw regError;
+    // Subscribe to real-time pulses from both tables
+    const channel = supabase
+      .channel('kernel_pulse')
+      .on('postgres_changes', { event: '*', schema: 'public', table: SCHEMA.TABLES.TELEMETRY }, () => sync_telemetry())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sys_registry' }, () => sync_telemetry())
+      .subscribe();
 
-        // 2. Prueba de conteo en Telemetría (Tabla sys_events)
-        // Nota: SCHEMA.TABLES.TELEMETRY debe apuntar a 'sys_events' en constants.ts
-        const { count, error: evError } = await supabase
-          .from(SCHEMA.TABLES.TELEMETRY)
-          .select('*', { count: 'exact', head: true });
-
-        if (evError) {
-            console.warn("[Telemetry Probe Warning]:", evError.message);
-            // No lanzamos error fatal aquí para que el monitor de registro siga vivo
-        }
-
-        setStatus({ registry: 'ok', events: count });
-      } catch (err: any) {
-        setStatus(prev => ({ ...prev, registry: 'error' }));
-        setErrorMessage(err.message);
-        console.error("[Kernel Monitor Error]:", err);
-      }
-    };
-
-    probeKernel();
-  }, []);
+    return () => { supabase.removeChannel(channel); };
+  }, [tenant?.id]);
 
   return (
-    <div style={{ 
-      position: 'fixed', 
-      bottom: '20px', 
-      right: '20px', 
-      padding: '15px', 
-      background: 'rgba(26, 26, 26, 0.9)', 
-      color: '#00ff00', 
-      borderRadius: '8px', 
-      fontFamily: 'monospace',
-      fontSize: '11px',
-      border: '1px solid #333',
-      zIndex: 9999,
-      boxShadow: '0 4px 15px rgba(0,0,0,0.5)',
-      backdropFilter: 'blur(4px)'
-    }}>
-      <div style={{ fontWeight: 'bold', marginBottom: '8px', borderBottom: '1px solid #444', color: '#888' }}>
-        SYS_KERNEL_PROBE v1.1
-      </div>
-      
-      <div style={{ marginBottom: '4px' }}>
-        REGISTRY: {status.registry === 'ok' ? '🟢 ONLINE' : status.registry === 'loading' ? '🟡 PROBING...' : '🔴 FAILED'}
-      </div>
-      
-      <div>
-        TELEMETRY: 📊 {status.events ?? 0} EVTS
-      </div>
-      
-      {errorMessage && (
-        <div style={{ 
-          color: '#ff4444', 
-          marginTop: '10px', 
-          fontSize: '9px', 
-          maxWidth: '200px',
-          borderTop: '1px dashed #552222',
-          paddingTop: '5px'
-        }}>
-          LOG_ERR: {errorMessage}
+    <div className="fixed bottom-6 left-6 z-[1000] font-mono selection:bg-zinc-800 pointer-events-none">
+      <div className="bg-black/90 border border-zinc-800 p-5 rounded-sm backdrop-blur-xl w-64 shadow-2xl">
+        
+        {/* MONITOR HEADER */}
+        <div className="flex justify-between items-center border-b border-zinc-800 pb-3 mb-3">
+          <span className="text-zinc-500 text-[9px] font-bold uppercase tracking-[0.2em]">Sys_Kernel_v51</span>
+          <div className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+            <span className="text-emerald-500 text-[9px] font-bold">ONLINE</span>
+          </div>
         </div>
-      )}
+
+        {/* METRICS GRID */}
+        <div className="space-y-3">
+          <div className="flex justify-between items-center">
+            <span className="text-zinc-400 text-[10px] uppercase">Total_Events:</span>
+            <span className="text-white text-xs font-bold">{telemetry.total_events}</span>
+          </div>
+          
+          <div className="flex justify-between items-center">
+            <span className="text-zinc-400 text-[10px] uppercase font-bold text-blue-400/80">Geo_Traces (Ext):</span>
+            <span className="text-blue-400 text-xs font-black">{telemetry.geo_traces}</span>
+          </div>
+
+          <div className="flex justify-between items-center">
+            <span className="text-zinc-400 text-[10px] uppercase font-bold text-emerald-400/80">Registry (Int):</span>
+            <span className="text-emerald-400 text-xs font-black">{telemetry.registry_count}</span>
+          </div>
+        </div>
+
+        {/* FOOTER LOG */}
+        <div className="mt-4 pt-3 border-t border-zinc-900 flex justify-between items-center">
+          <span className="text-zinc-600 text-[8px] uppercase">Last_Sync:</span>
+          <span className="text-zinc-500 text-[8px]">{telemetry.last_event}</span>
+        </div>
+
+      </div>
     </div>
   );
 };

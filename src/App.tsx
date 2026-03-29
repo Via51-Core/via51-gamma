@@ -1,57 +1,64 @@
-// src/App.tsx
+// ==========================================
+// PATH: src/App.tsx
+// FUNCTION: Central Chassis (System Switcher)
+// ==========================================
 import React, { useState } from 'react';
 import { TenantProvider, useTenant } from './context/TenantContext';
 import { NodeController } from './components/NodeController';
-import { KernelMonitor } from './components/KernelMonitor'; // El estetoscopio del sistema
+import { KernelMonitor } from './components/KernelMonitor';
+import { InternalRegistryEngine } from './components/internal/InternalRegistryEngine';
 
 const MainLayout: React.FC = () => {
-  const { tenant, loading, error } = useTenant();
-  // Iniciamos en el nodo 'root' por estándar de arquitectura
+  const { tenant, loading } = useTenant();
   const [currentNode, setCurrentNode] = useState('root');
+  const [isInternalMode, setIsInternalMode] = useState(false);
 
-  // 1. Estado de Sincronización (Agnóstico)
-  if (loading) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-slate-900 text-white font-mono">
-        <div className="animate-pulse">SYNCHRONIZING_CORE_SYSTEM...</div>
-      </div>
-    );
-  }
+  if (loading) return <div className="h-screen bg-black flex items-center justify-center font-mono text-zinc-500 animate-pulse uppercase text-[10px] tracking-[0.3em]">Synching_System_Chassis...</div>;
 
-  // 2. Estado de Error de Registro
-  if (error || !tenant) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-red-950 text-red-200 p-8 text-center">
-        <div>
-          <h2 className="text-xl font-bold mb-2">CRITICAL_SYSTEM_ERROR</h2>
-          <p className="opacity-70 text-sm">Registro de identidad no detectado en sys_registry.</p>
-          <p className="mt-4 text-xs font-mono">Verifique SLUG en .env y conexión Supabase.</p>
-        </div>
-      </div>
-    );
-  }
-
-  // 3. Renderizado del Motor (Agnosticismo Total)
   return (
-    <div className="holding-container min-h-screen">
-      {/* El controlador ahora recibe las órdenes del tenant dinámico */}
-      <NodeController 
-        nodeId={currentNode} 
-        onNavigate={(id) => setCurrentNode(id)} 
-      />
+    <div className="holding-main bg-black min-h-screen text-white selection:bg-blue-900">
+      
+      {/* 🔐 OPERATIONAL ACCESS SWITCH (INTERNAL ONLY) */}
+      <div className="fixed top-6 right-6 z-[999]">
+        <button 
+          onClick={() => setIsInternalMode(!isInternalMode)}
+          className={`border px-4 py-2 text-[10px] font-bold uppercase tracking-widest transition-all ${
+            isInternalMode ? 'bg-white text-black border-white' : 'bg-transparent text-zinc-600 border-zinc-800 hover:border-white hover:text-white'
+          }`}
+        >
+          {isInternalMode ? 'CLOSE_INTERNAL_SESSION' : 'INTERNAL_ACCESS'}
+        </button>
+      </div>
 
-      {/* 🛰️ El Monitor de Salud (Solo visible en desarrollo o por arquitectura) */}
+      {isInternalMode ? (
+        /* LAYER: INTERNAL (BACK-OFFICE) */
+        <section className="internal-ops-layer h-screen flex items-center justify-center p-6 bg-zinc-950">
+          <InternalRegistryEngine 
+            engine_mode="INPUT" 
+            on_action_complete={() => setIsInternalMode(false)}
+            on_abort={() => setIsInternalMode(false)}
+          />
+        </section>
+      ) : (
+        /* LAYER: EXTERNAL (PAGE 0 TO N) */
+        <section className="external-canvas-layer">
+          <NodeController 
+            nodeId={currentNode} 
+            onNavigate={(id) => setCurrentNode(id)} 
+          />
+        </section>
+      )}
+
+      {/* GLOBAL SYSTEM TOOLS */}
       <KernelMonitor />
     </div>
   );
 };
 
-const App: React.FC = () => {
-  return (
-    <TenantProvider>
-      <MainLayout />
-    </TenantProvider>
-  );
-};
+const App: React.FC = () => (
+  <TenantProvider>
+    <MainLayout />
+  </TenantProvider>
+);
 
 export default App;
