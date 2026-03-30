@@ -1,3 +1,4 @@
+// src/App.tsx
 import React, { useState, useEffect } from 'react';
 import { supabase } from './lib/supabaseClient';
 import { TenantProvider, useTenant } from './context/TenantContext';
@@ -12,29 +13,27 @@ const MainLayout: React.FC = () => {
   const [user, setUser] = useState<any>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
-  const host = window.location.hostname;
-  const isHoldingAccess = host === 'ard.via51.org' || host === 'localhost' || host === '127.0.0.1';
-  const isPolitica = host === 'pol.via51.org';
-  const isInmobiliaria = host === 'fj.via51.org';
+  // Agnosticismo: La configuración viene del JSON de la DB, no del Hostname manual
+  const config = tenant?.configuracion_json || {};
+  const isHolding = config.type === 'HOLDING';
+  const brandName = config.brand_name || 'VÍA51';
+  const customContent = config.hero_title || '';
 
   useEffect(() => {
     const recordTelemetry = async () => {
       if (!tenant?.id) return;
 
       const { error } = await supabase
-        .from('sys_events') 
-        .insert([
-          { 
-            event_type: 'PAGE_LOAD', 
-            path: window.location.pathname,
-            tenant_id: tenant.id,
-            metadata: { 
-              agent: navigator.userAgent,
-              host: host,
-              timestamp: new Date().toISOString()
-            }
+        .from('sys_events')
+        .insert([{ 
+          event_type: 'PAGE_LOAD', 
+          path: window.location.pathname,
+          tenant_id: tenant.id,
+          metadata: { 
+            agent: navigator.userAgent,
+            timestamp: new Date().toISOString()
           }
-        ]);
+        }]);
       
       if (error) console.error("Telemetry_Pulse_Fail:", error.message);
     };
@@ -65,7 +64,9 @@ const MainLayout: React.FC = () => {
     setIsInternalMode(true);
   };
 
-  if (tenantLoading || isCheckingAuth) return <div className="h-screen bg-black flex items-center justify-center font-mono text-zinc-500 animate-pulse text-[10px]">Synching_System_Chassis...</div>;
+  if (tenantLoading || isCheckingAuth) {
+    return <div className="h-screen bg-black flex items-center justify-center font-mono text-zinc-500 animate-pulse text-[10px]">Synching_System_Chassis...</div>;
+  }
 
   return (
     <div className="bg-black min-h-screen text-white font-mono">
@@ -75,14 +76,22 @@ const MainLayout: React.FC = () => {
           {isInternalMode ? 'CLOSE_INTERNAL' : 'INTERNAL_ACCESS'}
         </button>
       </div>
+
       {isInternalMode ? (
-        <section className="h-screen p-6 bg-zinc-950"><InternalRegistryEngine on_action_complete={() => setIsInternalMode(false)} /></section>
+        <section className="h-screen p-6 bg-zinc-950">
+          <InternalRegistryEngine on_action_complete={() => setIsInternalMode(false)} />
+        </section>
       ) : (
-        <section>
-          {isHoldingAccess && <NodeController nodeId={currentNode} onNavigate={setCurrentNode} />}
-          {isPolitica && <div className="h-screen flex flex-col items-center justify-center"><h1>MESÍAS GUEVARA</h1></div>}
-          {isInmobiliaria && <div className="h-screen flex items-center justify-center"><h1>INMOBILIARIA FJ</h1></div>}
-          {!isHoldingAccess && !isPolitica && !isInmobiliaria && <div className="h-screen flex items-center justify-center uppercase text-xs opacity-50">VÍA51</div>}
+        <section className="h-screen flex flex-col items-center justify-center">
+          {/* Lógica de renderizado basada en capacidades/configuración, no en nombres de dominio */}
+          {isHolding ? (
+            <NodeController nodeId={currentNode} onNavigate={setCurrentNode} />
+          ) : (
+            <div className="text-center">
+              <h1 className="text-2xl font-bold tracking-tighter uppercase">{customContent || brandName}</h1>
+              {!customContent && <span className="opacity-50 text-[10px]">SYSTEM_GENERIC_NODE</span>}
+            </div>
+          )}
         </section>
       )}
       <KernelMonitor />

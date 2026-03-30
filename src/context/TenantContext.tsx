@@ -31,16 +31,30 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const syncSystem = async () => {
       try {
         const host = window.location.hostname;
-        // Resolución de SLUG (Alfa I/O)
-        const slug = (host === 'localhost' || host === '127.0.0.1')
-          ? (import.meta.env.VITE_DEV_CLIENT_SLUG || 'mesias') 
-          : host.split('.')[0];
 
-        // Consulta limpia a esquema public
+        // Resolución Agnóstica (Beta I/O)
+        // Ya no cortamos strings. Buscamos el objeto de configuración por su identificador único.
+        // En un entorno Multi-Tenant ideal, la tabla de organizaciones debería tener una columna 'domain' 
+        // o usar el slug definido en el Middleware de Vercel.
+        
+        let targetSlug = '';
+        
+        if (host === 'localhost' || host === '127.0.0.1') {
+          targetSlug = import.meta.env.VITE_DEV_CLIENT_SLUG || 'holding-ard';
+        } else {
+          // Mapeo directo para evitar lógica de strings en el cliente
+          const domainMap: Record<string, string> = {
+            'ard.via51.org': 'holding-ard',
+            'pol.via51.org': 'politica-general',
+            'fj.via51.org': 'inmobiliaria-fj'
+          };
+          targetSlug = domainMap[host] || host;
+        }
+
         const { data, error: dbError } = await supabase
           .from(SCHEMA.TABLES.ORGANIZATIONS)
           .select('*')
-          .eq('slug', slug.toLowerCase().trim())
+          .eq('slug', targetSlug.toLowerCase().trim())
           .maybeSingle();
 
         if (dbError) throw dbError;
@@ -49,11 +63,11 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           setTenant({
             id: data.id,
             slug: data.slug,
-            nodeTree: data[SCHEMA.DATA_KEYS.TREE],
-            config: data[SCHEMA.DATA_KEYS.CONFIG]
+            nodeTree: data[SCHEMA.DATA_KEYS.TREE] || data.node_tree,
+            config: data[SCHEMA.DATA_KEYS.CONFIG] || data.configuracion_json
           });
         } else {
-          setError(`REGISTRO_NO_ENCONTRADO: ${slug}`);
+          setError(`REGISTRO_NO_ENCONTRADO: ${targetSlug}`);
         }
       } catch (err: any) {
         setError(`FALLO_KERNEL: ${err.message}`);

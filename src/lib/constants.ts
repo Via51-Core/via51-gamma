@@ -1,17 +1,12 @@
 // src/lib/constants.ts
-// Motor de Identidad - Sintonía Antigravity
-
 export const SCHEMA = {
   TABLES: {
-    // Usamos el nombre plano para que Supabase busque en 'public' por defecto
-    ORGANIZATIONS: 'sys_registry', 
-    TELEMETRY: 'sys_events' 
+    ORGANIZATIONS: 'sys_registry',
+    EVENTS: 'sys_events',
+    PERMISSIONS: 'user_permissions'
   },
   DATA_KEYS: {
-    // Sintonizado con las columnas físicas de tu base de datos
-    TREE: 'node_tree',           // La columna que contiene el JSON fractal
-    CONFIG: 'configuracion_json', // Configuración de motor (Alfa/Beta/Gamma)
-    THEME: 'theme',
-    ASSETS: 'assets'
+    TREE: 'node_tree',
+    CONFIG: 'configuration' // Actualizado de configuracion_json
   }
-} as const;
+};
