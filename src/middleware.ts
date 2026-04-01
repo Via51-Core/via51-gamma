@@ -1,34 +1,46 @@
-// src/middleware.ts
+/**
+ * PATH: /middleware.ts
+ * ROLE: Nivel 1 - BETA (Control de Tráfico y Contexto)
+ * DESC: Intercepta peticiones para inyectar el Tenant Slug en la sesión de DB.
+ */
+
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs';
 
-export function middleware(req: NextRequest) {
-  const host = req.headers.get('host') || '';
-  const url = req.nextUrl.clone();
+export async function middleware(req: NextRequest) {
+  const res = NextResponse.next();
+  const supabase = createMiddlewareClient({ req, res });
 
-  // Mapeo agnóstico de subdominios a Slugs del Registro
-  const tenantMap: Record<string, string> = {
-    'ard.via51.org': 'holding-ard',
-    'pol.via51.org': 'politica-general',
-    'fj.via51.org': 'inmobiliaria-fj',
-    'localhost:3000': 'holding-ard' // Para desarrollo
-  };
+  // 1. Extraer subdominio (Slug del Tenant)
+  const hostname = req.headers.get('host');
+  const slug = hostname?.split('.')[0];
 
-  const tenantSlug = tenantMap[host] || 'default';
-
-  // Inyectamos el slug en un header para que el Frontend o la API lo usen sin recalcular
-  const response = NextResponse.next();
-  response.headers.set('x-tenant-slug', tenantSlug);
-
-  // Lógica de redirección para Holding preservada pero limpia
-  if (host.includes('ard.via51.org') && url.pathname === '/') {
-    url.pathname = '/holdings/ard';
-    return NextResponse.rewrite(url);
+  if (!slug || slug === 'www' || slug === 'via51') {
+    // Redirigir a la fachada principal si no hay subdominio ALFA
+    return res;
   }
 
-  return response;
+  // 2. Establecer el contexto del Tenant en la sesión de Postgres
+  // Esto activa las políticas RLS configuradas previamente
+  await supabase.rpc('set_app_context', { 
+    tenant_slug: slug 
+  });
+
+  // 3. Inyectar el slug en las cabeceras para consumo del Frontend
+  res.headers.set('x-v51-tenant-slug', slug);
+
+  return res;
 }
 
 export const config = {
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
+  matcher: [
+    /*
+     * Match all request paths except for the ones starting with:
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     */
+    '/((?!_next/static|_next/image|favicon.ico).*)',
+  ],
 };

@@ -1,4 +1,8 @@
-// src/hooks/useV51Registry.ts
+/**
+ * ARCHIVO: src/hooks/useV51Registry.ts
+ * DESCRIPCIÓN: Hook encargado de la extracción agnóstica de datos de la DB.
+ * REGLA: Usa columnas estandarizadas (configuration, node_tree).
+ */
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
@@ -7,35 +11,38 @@ export const useV51Registry = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  // En localhost, forzamos el slug 'ard' para pruebas si es necesario
-  const CURRENT_SLUG = window.location.hostname === 'localhost' ? 'ard' : window.location.hostname.split('.')[0];
+  // Identificación del Tenant (localhost -> politica-general para pruebas)
+  const hostname = window.location.hostname;
+  const CURRENT_SLUG = hostname === 'localhost' ? 'politica-general' : hostname.split('.')[0];
 
   useEffect(() => {
     const fetchRegistry = async () => {
       try {
         setLoading(true);
         
-        // MAPEADO DE EQUIVALENCIAS V51
-        // slug -> hostname
-        // configuracion_json -> theme/chassis config
+        // Petición al Kernel (Supabase)
         const { data, error: supaError } = await supabase
           .from('sys_registry')
-          .select('slug, configuracion_json, arbol_nodos_json, node_tree')
+          .select('id, slug, configuration, node_tree') 
           .eq('slug', CURRENT_SLUG)
-          .single();
+          .maybeSingle();
 
         if (supaError) throw new Error(supaError.message);
-
-        // Normalizamos la salida para el motor
-        setNodeData({
-          hostname: data.slug,
-          // Extraemos el tipo de chasis del JSON de configuración
-          chassis_type: data.configuracion_json?.chassis || 'MOBILE',
-          // El path del componente viene del árbol de nodos
-          node_path: data.configuracion_json?.node_path || 'ArdDashboard',
-          theme_config: data.configuracion_json
-        });
-
+        
+        if (!data) {
+          setError("TENANT_NOT_FOUND");
+        } else {
+          // Normalización de datos para el proyector
+          setNodeData({
+            id: data.id,
+            slug: data.slug,
+            // Extraemos del JSONB de configuración
+            phrases: data.configuration?.campaign_phrases || ["VÍA51_ACTIVE"],
+            brand: data.configuration?.brand_name || 'VÍA51_UNIT',
+            speed: data.configuration?.rotation_speed || 3000,
+            tree: data.node_tree
+          });
+        }
       } catch (err: any) {
         setError(err.message);
       } finally {
