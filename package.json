@@ -1,32 +1,33 @@
+/**
+ * FUNCIÓN: Configuración de Ciclo de Vida del Proyecto
+ * LUGAR: /package.json
+ * FECHA: 02-Abr-2026 | 17:55
+ * OPERACIÓN: 12-A (Ecosistema Vía51)
+ */
 {
-  "name": "via51-nodo-central",
-  "version": "0.1.0",
+  "name": "via51-gamma",
   "private": true,
+  "version": "1.2.0",
   "type": "module",
-  "dependencies": {
-    "@supabase/supabase-js": "^2.100.0",
-    "framer-motion": "^12.38.0",
-    "lucide-react": "^0.577.0",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-router-dom": "^7.13.2"
-  },
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "tsc && vite build",
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview"
   },
+  "dependencies": {
+    "@supabase/supabase-client": "^2.39.0",
+    "framer-motion": "^10.16.4",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4.2.2",
-    "@types/react": "^19.2.14",
-    "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^4.2.0",
-    "autoprefixer": "^10.4.27",
-    "esbuild": "0.21.5",
-    "postcss": "^8.5.8",
-    "tailwindcss": "^4.2.2",
-    "ts-node": "^10.9.2",
-    "typescript": "^6.0.2",
-    "vite": "5.4.11"
+    "@types/react": "^18.2.15",
+    "@types/react-dom": "^18.2.7",
+    "typescript": "^5.0.2",
+    "vite": "^4.4.5",
+    "autoprefixer": "^10.4.14",
+    "postcss": "^8.4.27",
+    "tailwindcss": "^3.3.3"
   }
 }
