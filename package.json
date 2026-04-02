@@ -1,9 +1,3 @@
-/**
- * FUNCIÓN: Configuración de Ciclo de Vida del Proyecto
- * LUGAR: /package.json
- * FECHA: 02-Abr-2026 | 17:55
- * OPERACIÓN: 12-A (Ecosistema Vía51)
- */
 {
   "name": "via51-gamma",
   "private": true,
@@ -19,7 +13,8 @@
     "@supabase/supabase-client": "^2.39.0",
     "framer-motion": "^10.16.4",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "recharts": "^2.12.0"
   },
   "devDependencies": {
     "@types/react": "^18.2.15",
