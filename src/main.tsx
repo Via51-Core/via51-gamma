@@ -1,12 +1,14 @@
 /**
- * ARCHIVO: src/main.tsx
- * DESCRIPCIÓN: Punto de entrada absoluto. 
- * LIMPIEZA: Se purga cualquier enrutador viejo o llamado a V51_Screen_Engine.
+ * FUNCIÓN: Punto de Entrada Principal (Main Engine)
+ * LUGAR: /src/main.tsx
+ * FECHA: 02-Abr-2026 | 18:05
+ * DESCRIPCIÓN: Renderizado del Nodo ALFA con StrictMode de React.
  */
+
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.tsx';
-import './index.css'; // Asegúrate de que esta sea la ruta correcta a tus estilos de Tailwind
+import './index.css'; // Asegura que Tailwind esté cargado
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
