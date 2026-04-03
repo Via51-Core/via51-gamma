@@ -1,5 +1,7 @@
 {
     "compilerOptions": {
+        "noImplicitAny": false,
+        "suppressImplicitAnyIndexErrors": true
         "target": "ESNext",
         "useDefineForClassFields": true,
         "lib": [

@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabaseClient';
+import { supabase } from '../lib/supabase';
 import SentimentChart from '../components/charts/SentimentChart';
 import { motion, AnimatePresence } from 'framer-motion';
 
