@@ -3,8 +3,8 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Variables placeholder que serán sobreescritas por el TenantContext */
 :root {
-  /* Variables placeholder que serán sobreescritas por el TenantContext */
   --v51-primary: #222;
   --v51-secondary: #fff;
   --v51-accent: #444;
@@ -23,7 +23,8 @@ body {
 /* COMPONENTES AGNOSTICOS */
 
 /* Los botones se pintan según la 'energía' (datos) que reciban */
-button, .v51-button {
+button,
+.v51-button {
   background-color: var(--v51-primary);
   color: var(--v51-secondary);
   border: 1px solid var(--v51-accent);
@@ -56,6 +57,7 @@ button:hover {
 ::-webkit-scrollbar {
   width: 8px;
 }
+
 ::-webkit-scrollbar-thumb {
   background: var(--v51-primary);
   border-radius: 10px;
