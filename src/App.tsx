@@ -1,22 +1,21 @@
 import React from 'react';
 import { V51_Visor_Animado } from './layers/ui/V51_Visor_Animado';
+import { CORE_CONFIG } from './layers/gamma/config';
 
 function App() {
-  // Activos listos para el despliegue
-  const activos = [
-    "/assets/img/ceo-lima.png",
-    "/assets/img/corredor-morado.png"
-  ];
+  const { electoral } = CORE_CONFIG;
 
   return (
-    <div className="bg-black w-full h-screen overflow-hidden">
-      <V51_Visor_Animado
-        slides={activos}
-        frasePrincipal="Liderazgo con Calidad Mundial."
-        fraseSecundaria="Construyendo el Plan #1 para el Perú."
-        posicion="center"
-      />
-    </div>
+    <main className="min-h-screen bg-black flex items-center justify-center overflow-hidden">
+      {/* Contenedor con Aspect Ratio Fijo */}
+      <div className="relative w-full max-w-md aspect-[9/16] bg-zinc-900 shadow-2xl md:max-h-[92vh] overflow-hidden rounded-[2.5rem] border-[8px] border-zinc-800">
+        <V51_Visor_Animado
+          slides={electoral.slides}
+          frasePrincipal={electoral.fraseA}
+          fraseSecundaria={electoral.fraseB}
+        />
+      </div>
+    </main>
   );
 }
 
