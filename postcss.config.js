@@ -1,6 +1,11 @@
+/**
+ * CONFIGURACIÓN: Motor de Procesamiento CSS
+ * ESTADO: V51-COMPATIBLE
+ */
 export default {
   plugins: {
-    '@tailwindcss/postcss': {}, // <--- ESTO es lo que acabas de instalar
-    'autoprefixer': {},
+    // Usamos el nombre estándar del plugin para máxima compatibilidad
+    tailwindcss: {},
+    autoprefixer: {},
   },
 }

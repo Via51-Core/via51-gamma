@@ -1,26 +1,21 @@
-/**
- * PATH: /tailwind.config.js
- * DESC: Configuración de Antigravity para el ecosistema fractal.
- */
-module.exports = {
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: [
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",
+    "./src/components/**/*.{js,ts,jsx,tsx}",
+    "./src/layers/**/*.{js,ts,jsx,tsx}",
+    "./src/views/**/*.{js,ts,jsx,tsx}",
+  ],
   theme: {
     extend: {
-      fontFamily: {
-        mono: ['JetBrains Mono', 'IBM Plex Mono', 'monospace'],
+      colors: {
+        v51: {
+          cobalto: '#0047AB',
+          canvas: '#0a0a0a',
+        }
       },
-      animation: {
-        'shimmer': 'shimmer 2s linear infinite',
-        'pulse-fast': 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-      },
-      keyframes: {
-        shimmer: {
-          '100%': { transform: 'translateX(100%)' },
-        },
-      },
-      letterSpacing: {
-        tighter: '-.05em',
-        widest: '.25em',
-      }
     },
   },
+  plugins: [],
 }

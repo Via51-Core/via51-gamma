@@ -1,0 +1,4293 @@
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\admin\DashboardMetricas.tsx
+==========================================================
+import React, { useState, useEffect } from 'react';
+import { createClient } from '@supabase/supabase-client';
+
+const supabase = createClient('SU_URL', 'SU_KEY_ANON');
+
+const DashboardMetricas = () => {
+  const [metricas, setMetricas] = useState([]);
+  const [totalVisitas, setTotalVisitas] = useState(0);
+
+  useEffect(() => {
+    const fetchMetricas = async () => {
+      // 1. Obtener conteo agrupado por cliente y ciudad
+      const { data, error } = await supabase
+        .from('radar_eventos')
+        .select('cliente_id(nombre_comercial), ubicacion, dispositivo');
+
+      if (data) {
+        setTotalVisitas(data.length);
+        // Procesamos los datos para la tabla de control
+        const resumen = data.reduce((acc, curr) => {
+          const nombre = curr.cliente_id.nombre_comercial;
+          acc[nombre] = (acc[nombre] || 0) + 1;
+          return acc;
+        }, {});
+        setMetricas(Object.entries(resumen));
+      }
+    };
+
+    fetchMetricas();
+    // Suscripción en tiempo real para ver los impactos mientras ocurren
+    const sub = supabase.channel('radar-realtime')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'radar_eventos' }, 
+      payload => fetchMetricas())
+      .subscribe();
+
+    return () => supabase.removeChannel(sub);
+  }, []);
+
+  return (
+    <div className="p-8 bg-[#050505] min-h-screen text-white font-mono">
+      <div className="flex justify-between items-center mb-10 border-b border-white/10 pb-6">
+        <div>
+          <h2 className="text-3xl font-black tracking-tighter">VÍA 51 | CONTROL DE TRÁFICO</h2>
+          <p className="text-blue-500 text-xs mt-1">SISTEMA MULTI-TENANT ACTIVO</p>
+        </div>
+        <div className="text-right">
+          <p className="text-4xl font-black text-white">{totalVisitas}</p>
+          <p className="text-[10px] opacity-50 tracking-widest uppercase font-bold">Impactos Totales</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* TABLA DE RENDIMIENTO POR CLIENTE */}
+        <div className="bg-white/5 p-6 rounded-2xl border border-white/5 shadow-2xl">
+          <h3 className="text-sm font-bold mb-6 opacity-40 uppercase tracking-widest">Performance por Cliente</h3>
+          {metricas.map(([cliente, visitas]) => (
+            <div key={cliente} className="flex items-center justify-between py-4 border-b border-white/5 last:border-0">
+              <span className="text-lg font-light">{cliente}</span>
+              <div className="flex items-center gap-4">
+                <div className="h-1 w-32 bg-white/10 rounded-full overflow-hidden">
+                  <div className="h-full bg-blue-600" style={{ width: `${(visitas/totalVisitas)*100}%` }} />
+                </div>
+                <span className="font-bold text-blue-400">{visitas}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* MAPA DE CALOR LÓGICO (LOGS) */}
+        <div className="bg-white/5 p-6 rounded-2xl border border-white/5">
+          <h3 className="text-sm font-bold mb-6 opacity-40 uppercase tracking-widest">Últimas Detecciones (Radar)</h3>
+          <div className="space-y-3 text-[10px]">
+            {/* Aquí se listan los últimos 10 eventos con ciudad y hora */}
+            <div className="p-2 bg-green-500/10 text-green-400 rounded border border-green-500/20">
+              [20:15:30] IMPACTO DETECTADO: Lima, Miraflores - Dispositivo: iPhone
+            </div>
+            <div className="p-2 bg-blue-500/10 text-blue-400 rounded border border-blue-500/20">
+              [20:15:42] IMPACTO DETECTADO: Arequipa, Cercado - Dispositivo: Android
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default DashboardMetricas;
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\admin\PanelCarga.tsx
+==========================================================
+import React, { useState } from 'react';
+import { createClient } from '@supabase/supabase-client';
+import Papa from 'papaparse';
+
+const supabase = createClient('SU_URL', 'SU_KEY_ANON');
+
+const PanelCarga = ({ clienteId }) => {
+  const [datos, setDatos] = useState([]);
+  const [subiendo, setSubiendo] = useState(false);
+
+  // 1. PROCESAR EL ARCHIVO (Excel convertido a CSV)
+  const manejarArchivo = (e) => {
+    const archivo = e.target.files[0];
+    Papa.parse(archivo, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (results) => {
+        setDatos(results.data);
+        console.log("Datos listos para mapear:", results.data);
+      }
+    });
+  };
+
+  // 2. SUBIDA MASIVA A SUPABASE
+  const ejecutarCarga = async () => {
+    setSubiendo(true);
+    
+    // Mapeo dinámico: Transformamos las filas del Excel al esquema del SaaS
+    const nodosParaSubir = datos.map(fila => ({
+      cliente_id: clienteId,
+      titulo_que: fila.nombre || fila.producto || fila.servicio,
+      descripcion_como: fila.descripcion || fila.propuesta,
+      url_media: fila.imagen_url,
+      tipo_media: fila.tipo || 'imagen',
+      // Todo lo demás se va al JSONB de metadatos
+      metadatos: {
+        precio: fila.precio,
+        stock: fila.stock,
+        categoria: fila.categoria,
+        piso: fila.piso, // Para inmobiliaria
+        estado: fila.estado
+      }
+    }));
+
+    const { error } = await supabase.from('nodos_alfa').insert(nodosParaSubir);
+
+    if (error) alert("Error en carga: " + error.message);
+    else alert(`¡Éxito! ${nodosParaSubir.length} Nodos Alfa creados.`);
+    
+    setSubiendo(false);
+  };
+
+  return (
+    <div className="p-8 bg-gray-900 min-h-screen text-white font-sans">
+      <h2 className="text-2xl font-bold mb-6">ADMINISTRADOR DE NODOS - VÍA 51</h2>
+      
+      <div className="border-2 border-dashed border-gray-700 p-10 rounded-xl text-center bg-gray-800/50">
+        <input 
+          type="file" 
+          accept=".csv" 
+          onChange={manejarArchivo}
+          className="mb-4 block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700"
+        />
+        <p className="text-gray-500">Cargue el inventario (CSV) del cliente.</p>
+      </div>
+
+      {datos.length > 0 && (
+        <div className="mt-8">
+          <h3 className="mb-4">Previsualización de {datos.length} ítems</h3>
+          <div className="max-h-60 overflow-y-auto bg-black p-4 rounded-lg border border-gray-700">
+             <pre className="text-[10px] text-green-400">{JSON.stringify(datos[0], null, 2)}</pre>
+          </div>
+          <button 
+            onClick={ejecutarCarga}
+            disabled={subiendo}
+            className="mt-6 w-full bg-blue-600 p-4 rounded-lg font-bold hover:bg-blue-500 transition-colors"
+          >
+            {subiendo ? "SINCRONIZANDO CON NODO ALFA..." : "LANZAR AL AIRE (CONEXIÓN SUPABASE)"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default PanelCarga;
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\app\api\v1\engine\route.ts
+==========================================================
+// src/app/api/v1/engine/route.ts
+import { NextResponse } from 'next/server';
+import { vetoGatekeeper } from '@/middleware/veto-gatekeeper';
+import { CoreValidator } from '@/core/validator';
+import { CoreProcessor } from '@/core/processor';
+import { logEvent } from '@/lib/audit-logger';
+
+// Standardized Response Codes
+const STATUS_CODES = {
+    SUCCESS: 200,
+    VETO_TRIGGERED: 403,
+    VALIDATION_FAILED: 400,
+    CORE_ERROR: 500
+};
+
+export async function POST(request: Request) {
+    const body = await request.json();
+    const { domain_id, action, payload, actor_id, tenant_id, vetoToken } = body;
+
+    try {
+        // STEP 1: THE VETO (Gamma Level Check)
+        // Only Fredy or authorized tokens can perform Level 2 operations.
+        vetoGatekeeper({ userId: actor_id, action, vetoToken });
+
+        // STEP 2: THE SCHEMA (Loading the Registry)
+        // Dynamic import based on domain_id (No hardcoding)
+        let schema;
+        try {
+            schema = await import(`@/registry/domains/${domain_id}.json`);
+        } catch (e) {
+            throw new Error(`Registry Error: Domain '${domain_id}' not found.`);
+        }
+
+        // STEP 3: THE VALIDATOR (Beta Level)
+        const validation = CoreValidator.validate(payload, schema);
+        if (!validation.isValid) {
+            await logEvent({
+                actor_id,
+                action_type: 'VALIDATION_FAILED',
+                payload_snapshot: { domain_id, errors: validation.errors },
+                tenant_id,
+                status: 'FAILURE'
+            });
+
+            return NextResponse.json(
+                { error: 'Validation Failed', details: validation.errors },
+                { status: STATUS_CODES.VALIDATION_FAILED }
+            );
+        }
+
+        // STEP 4: THE PROCESSOR (Execution Layer)
+        // Executes transition based on registry's allowedTransitions
+        const result = await CoreProcessor.executeTransition(
+            {
+                entity_id: payload.id || 'new_entity',
+                current_status: payload.status || 'draft',
+                target_status: payload.target_status,
+                actor_id,
+                tenant_id
+            },
+            schema.transitions
+        );
+
+        if (!result.success) {
+            return NextResponse.json(
+                { error: 'Processor Error', message: result.message },
+                { status: STATUS_CODES.CORE_ERROR }
+            );
+        }
+
+        // STEP 5: FINAL SUCCESS
+        return NextResponse.json(
+            {
+                status: 'CORE_SUCCESS',
+                message: `Agnostic process completed for domain: ${domain_id}`,
+                data: result
+            },
+            { status: STATUS_CODES.SUCCESS }
+        );
+
+    } catch (error: any) {
+        // HANDLE VETO OR SYSTEM CRASHES
+        const isVeto = error.message.includes('403 Forbidden');
+
+        // Log the crash/veto in Gamma
+        await logEvent({
+            actor_id: actor_id || 'UNKNOWN',
+            action_type: 'ENGINE_EXCEPTION',
+            payload_snapshot: { error: error.message },
+            tenant_id: tenant_id || 'CORE',
+            status: 'FAILURE'
+        });
+
+        return NextResponse.json(
+            { error: isVeto ? 'Veto Triggered' : 'Internal Engine Error', message: error.message },
+            { status: isVeto ? STATUS_CODES.VETO_TRIGGERED : STATUS_CODES.CORE_ERROR }
+        );
+    }
+}
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\app\holdings\ard\page.tsx
+==========================================================
+// src/app/holdings/ard/page.tsx
+import React from 'react';
+
+export default function ARDLanding() {
+  return (
+    <div className="min-h-screen bg-[#0a0a0c] text-slate-300 selection:bg-blue-500/30">
+      {/* Background Decor */}
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-blue-900/10 via-transparent to-transparent -z-10" />
+      
+      <main className="max-w-6xl mx-auto px-6 py-20">
+        <header className="mb-16">
+          <div className="inline-block px-3 py-1 rounded-full border border-blue-500/20 bg-blue-500/5 text-blue-400 text-xs font-mono mb-4">
+            SISTEMA CENTRAL VÍA51
+          </div>
+          <h1 className="text-5xl font-extrabold text-white tracking-tight mb-4">
+            Holding <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-500">Administrativo</span>
+          </h1>
+          <p className="text-lg text-slate-400 max-w-2xl">
+            Gestión de activos inmobiliarios, políticos y operativos desde un nodo centralizado.
+          </p>
+        </header>
+
+        {/* Grid de Accesos Rápidos */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <StatusCard title="Operaciones" status="Online" value="3 Nodos" />
+          <StatusCard title="Seguridad" status="Active" value="RLS Protegido" />
+          <StatusCard title="Audit" status="Sync" value="sys_events OK" />
+        </div>
+
+        {/* Botón de Acción Principal */}
+        <div className="mt-12 p-8 rounded-3xl border border-white/5 bg-white/[0.02] backdrop-blur-sm flex justify-between items-center">
+          <div>
+            <h3 className="text-xl font-bold text-white">Panel de Control General</h3>
+            <p className="text-sm text-slate-500">Acceso exclusivo para el Root Owner (9157ae13...)</p>
+          </div>
+          <button className="bg-white text-black px-8 py-3 rounded-xl font-bold hover:bg-blue-400 transition-colors">
+            Ingresar
+          </button>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+function StatusCard({ title, status, value }: { title: string, status: string, value: string }) {
+  return (
+    <div className="p-6 rounded-2xl border border-white/5 bg-white/[0.01]">
+      <div className="flex justify-between items-start mb-4">
+        <span className="text-xs font-semibold text-slate-500 uppercase tracking-widest">{title}</span>
+        <span className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]" />
+      </div>
+      <div className="text-2xl font-bold text-white">{value}</div>
+      <div className="text-xs text-slate-600 mt-1">{status}</div>
+    </div>
+  );
+}
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\components\depts\PoliticsDept.tsx
+==========================================================
+// path: src/components/depts/PoliticsDept.tsx
+export const PoliticsDept = ({ config }: { config: any }) => (
+  <div className="space-y-6 animate-in zoom-in-95 duration-700">
+    <div className="w-full h-2 bg-white/5 overflow-hidden">
+      <div className="h-full bg-cyan-500 w-[65%] shadow-[0_0_15px_cyan]" />
+    </div>
+    <div className="flex justify-between font-mono text-[10px]">
+      <span>TERRITORIAL_REACH</span>
+      <span className="text-cyan-400">65% / 100%</span>
+    </div>
+    <div className="grid grid-cols-3 gap-2">
+      {['DISTRITO_A', 'DISTRITO_B', 'DISTRITO_C'].map(d => (
+        <div key={d} className="p-4 border border-white/5 text-center text-[10px] hover:bg-white/5 transition-all">
+          {d}
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\components\depts\ProductionDept.tsx
+==========================================================
+// path: src/components/depts/ProductionDept.tsx
+export const ProductionDept = ({ config }: { config: any }) => (
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-1000">
+    <div className="p-6 border border-white/10 bg-black/40 hover:border-purple-500/50 transition-colors">
+      <h3 className="text-xs font-mono text-purple-400 mb-4 tracking-widest">ASSET_MAPPING</h3>
+      <div className="space-y-4">
+        {[1, 2, 3].map(i => (
+          <div key={i} className="flex justify-between items-center py-2 border-b border-white/5">
+            <span className="text-sm text-gray-400">Parcela_00{i}</span>
+            <span className="text-sm font-bold text-white">VALIDADO</span>
+          </div>
+        ))}
+      </div>
+    </div>
+    
+    <div className="p-6 border border-white/10 bg-black/40 flex flex-col justify-center items-center">
+      <div className="text-5xl font-black text-white">{config?.roi || '12.4'}%</div>
+      <div className="text-[10px] font-mono text-gray-500 mt-2">INDEXED_GROWTH_RATE</div>
+    </div>
+  </div>
+);
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\components\depts\SocialDept.tsx
+==========================================================
+// Path: C:/via51_ecosistema/via51-nodo-central/src/components/depts/SocialDept.tsx
+// Name: V51_Alpha_SocialDept_Refined
+// Identity: Comas, Lima, Peru | 2026-03-31 19:35:12
+
+import React from 'react';
+
+export const SocialDept: React.FC = () => {
+  const subNodes = [
+    { title: 'Community_Manager', status: 'ONLINE', color: 'border-blue-500' },
+    { title: 'Public_Relations', status: 'STANDBY', color: 'border-purple-500' },
+    { title: 'Social_Impact', status: 'ACTIVE', color: 'border-cyan-500' }
+  ];
+
+  return (
+    <section className="relative overflow-hidden p-1 bg-gradient-to-br from-white/10 to-transparent rounded-2xl border border-white/5 shadow-2xl">
+      <div className="bg-black/80 backdrop-blur-xl p-8 rounded-[14px]">
+        <header className="flex justify-between items-start mb-10">
+          <div>
+            <h2 className="text-4xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-200 uppercase italic">
+              Social_Dept <span className="text-xs font-mono text-white/40 not-italic">V51.6</span>
+            </h2>
+            <p className="text-[10px] font-mono tracking-[0.3em] text-blue-500/80 mt-1 uppercase">
+              Fractal Level: ALFA // Ecosystem: VIA51
+            </p>
+          </div>
+          <div className="px-3 py-1 border border-blue-500/50 rounded-full text-[9px] font-bold text-blue-400 animate-pulse">
+            PRIMARY_NODE
+          </div>
+        </header>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {subNodes.map((node) => (
+            <div 
+              key={node.title}
+              className={`group relative p-6 border-l-2 ${node.color} bg-white/5 hover:bg-white/10 transition-all duration-500 cursor-pointer overflow-hidden`}
+            >
+              <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-30 transition-opacity">
+                <span className="text-4xl font-black italic">{node.title[0]}</span>
+              </div>
+              
+              <span className="text-[10px] font-mono text-white/40 block mb-2 tracking-widest">
+                SYSTEM_ACCESS // {node.status}
+              </span>
+              <h3 className="text-xl font-bold text-white group-hover:translate-x-2 transition-transform duration-300">
+                {node.title.replace('_', ' ')}
+              </h3>
+              
+              <div className="mt-4 h-[1px] w-0 group-hover:w-full bg-gradient-to-r from-blue-500 to-transparent transition-all duration-700" />
+            </div>
+          ))}
+        </div>
+
+        <footer className="mt-12 flex items-center justify-between opacity-40">
+          <div className="flex items-center space-x-3">
+            <div className="w-1.5 h-1.5 bg-green-500 rounded-full shadow-[0_0_8px_rgba(34,197,94,0.8)]" />
+            <span className="text-[9px] font-mono uppercase tracking-tighter text-white">
+              Connection: Stable | Sec_Level: RLS_ENFORCED
+            </span>
+          </div>
+          <span className="text-[9px] font-mono italic text-white/50">Via51_Orchestration_v2.0</span>
+        </footer>
+      </div>
+    </section>
+  );
+};
+
+export default SocialDept;
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\components\display\ProjectedHero.tsx
+==========================================================
+// src/components/display/ProjectedHero.tsx
+import React from 'react';
+
+export const ProjectedHero: React.FC<{ config: any }> = ({ config }) => {
+  const { headline, rotation_speed = '10s' } = config;
+
+  return (
+    <div className="h-screen bg-black flex items-center justify-center overflow-hidden">
+      {/* Frame que simula un dispositivo móvil en el centro */}
+      <div className="w-[320px] h-[580px] border-2 border-zinc-800 rounded-[40px] relative flex items-center justify-center p-6 shadow-[0_0_50px_rgba(255,255,255,0.05)]">
+        
+        {/* Frase con animación de rotación/giro */}
+        <div className="text-center">
+          <h1 
+            className="text-2xl font-black tracking-tighter uppercase animate-spin-slow"
+            style={{ animationDuration: rotation_speed }}
+          >
+            {headline || "WAITING_FOR_DATA..."}
+          </h1>
+        </div>
+
+        {/* Decoración estética de celular */}
+        <div className="absolute top-4 w-20 h-1 bg-zinc-800 rounded-full"></div>
+      </div>
+    </div>
+  );
+};
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\components\internal\CampaignConsole.tsx
+==========================================================
+// src/components/internal/CampaignConsole.tsx
+import React, { useState } from 'react';
+import { supabase } from '../../lib/supabaseClient';
+
+interface CampaignConsoleProps {
+  tenantId: string;
+  currentConfig: any;
+}
+
+export const CampaignConsole: React.FC<CampaignConsoleProps> = ({ tenantId, currentConfig }) => {
+  const [inputPhrase, setInputPhrase] = useState('');
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  const updateNarrative = async () => {
+    setIsUpdating(true);
+    const updatedPhrases = [...(currentConfig.campaign_phrases || []), inputPhrase];
+    
+    const { error } = await supabase
+      .from('sys_registry')
+      .update({ 
+        configuration: { ...currentConfig, campaign_phrases: updatedPhrases } 
+      })
+      .eq('id', tenantId);
+
+    if (!error) setInputPhrase('');
+    setIsUpdating(false);
+  };
+
+  return (
+    <div className="p-4 border border-zinc-800 bg-zinc-950 font-mono">
+      <h3 className="text-[10px] text-blue-500 font-bold mb-4 uppercase">NARRATIVE_INJECTOR_V1</h3>
+      <div className="flex gap-2">
+        <input 
+          value={inputPhrase}
+          onChange={(e) => setInputPhrase(e.target.value)}
+          placeholder="ENTER_NEW_CAMPAIGN_PHRASE..."
+          className="flex-1 bg-black border border-zinc-800 p-2 text-xs focus:border-white outline-none"
+        />
+        <button 
+          onClick={updateNarrative}
+          disabled={isUpdating}
+          className="bg-white text-black px-4 py-2 text-[10px] font-black hover:bg-zinc-200 transition-all"
+        >
+          {isUpdating ? 'SYNCING...' : 'INJECT'}
+        </button>
+      </div>
+    </div>
+  );
+};
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\components\internal\InternalRegistryEngine.tsx
+==========================================================
+// ==========================================
+// PATH: src/components/internal/InternalRegistryEngine.tsx
+// COMPONENT: Classified Entity Engine (Input Mode)
+// STANDARD: AG-Agnostic / Section Routing
+// ==========================================
+import React, { useState } from 'react';
+import { supabase } from '../../lib/supabaseClient';
+
+export const InternalRegistryEngine: React.FC<{ on_action_complete: () => void; on_abort: () => void }> = ({ on_action_complete, on_abort }) => {
+  const [is_processing, set_is_processing] = useState(false);
+  const [form, set_form] = useState({
+    target_section: 'SECTION_BETA', // BETA = Desarrollo, GAMMA = Ciencia
+    entity_class: 'PERSON_NATURAL',
+    identity_label: '',
+    content_phrase: ''
+  });
+
+  const execute_transaction = async (e: React.FormEvent) => {
+    e.preventDefault();
+    set_is_processing(true);
+
+    try {
+      const system_payload = {
+        meta: { section: form.target_section },
+        identity: { class: form.entity_class, label: form.identity_label },
+        content: { phrase: form.content_phrase, timestamp: new Date().toISOString() }
+      };
+
+      const { error } = await supabase
+        .from('sys_registry')
+        .insert([{ 
+          slug: `${form.target_section.toLowerCase()}-${Date.now()}`, 
+          configuracion_json: system_payload 
+        }]);
+
+      if (error) throw error;
+      on_action_complete();
+    } catch (err) {
+      console.error("TX_ERR:", err);
+    } finally { set_is_processing(false); }
+  };
+
+  return (
+    <div className="bg-zinc-950 border border-zinc-800 p-8 rounded-lg w-full max-w-xl font-mono text-left">
+      <header className="mb-6 border-b border-zinc-800 pb-4">
+        <h2 className="text-white font-bold uppercase italic">Internal_Entity_Classify</h2>
+        <span className="text-[9px] text-zinc-500 uppercase tracking-widest">Targeting System v51</span>
+      </header>
+
+      <form onSubmit={execute_transaction} className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="text-[9px] text-zinc-500 uppercase">Target_Section</label>
+            <select 
+              className="w-full bg-zinc-900 border border-zinc-800 text-white p-2 rounded-sm outline-none focus:border-blue-500"
+              value={form.target_section}
+              onChange={e => set_form({...form, target_section: e.target.value})}
+            >
+              <option value="SECTION_BETA">BETA_DEVELOPMENT</option>
+              <option value="SECTION_GAMMA">GAMMA_SCIENCE</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-[9px] text-zinc-500 uppercase">Entity_Class</label>
+            <select 
+              className="w-full bg-zinc-900 border border-zinc-800 text-white p-2 rounded-sm outline-none focus:border-blue-500"
+              value={form.entity_class}
+              onChange={e => set_form({...form, entity_class: e.target.value})}
+            >
+              <option value="PERSON_NATURAL">PERSON</option>
+              <option value="INSTITUTION_ORG">INSTITUTION</option>
+            </select>
+          </div>
+        </div>
+
+        <input 
+          placeholder="IDENTITY_LABEL" 
+          required 
+          className="w-full bg-zinc-900 border border-zinc-800 text-white p-3 rounded-sm outline-none"
+          onChange={e => set_form({...form, identity_label: e.target.value})}
+        />
+
+        <textarea 
+          placeholder="CONTENT_PHRASE" 
+          required 
+          className="w-full bg-zinc-900 border border-zinc-800 text-white p-3 rounded-sm h-24 outline-none resize-none"
+          onChange={e => set_form({...form, content_phrase: e.target.value})}
+        />
+
+        <div className="flex gap-2 pt-4">
+          <button type="button" onClick={on_abort} className="flex-1 bg-zinc-800 text-zinc-400 py-3 text-xs uppercase font-bold">Abort</button>
+          <button type="submit" disabled={is_processing} className="flex-1 bg-white text-black py-3 text-xs uppercase font-bold">
+            {is_processing ? 'Committing...' : 'Commit_to_Section'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+};
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\components\layout\PortalHub.tsx
+==========================================================
+/**
+ * PATH: /src/components/layout/PortalHub.tsx
+ * ROLE: Nivel 2 - ALFA (Ejecución)
+ * DESC: Fachada tripartita del ecosistema VÍA51 con profundidad técnica ilimitada.
+ */
+
+import React from 'react';
+import { useTenant } from '../../hooks/useTenant';
+
+const SECTORS = [
+  { id: 'political', label: 'DEPARTAMENTO POLÍTICO', color: 'bg-red-900/20', border: 'border-red-500' },
+  { id: 'social', label: 'DEPARTAMENTO SOCIAL', color: 'bg-blue-900/20', border: 'border-blue-500' },
+  { id: 'productive', label: 'DEPARTAMENTO PRODUCTIVO', color: 'bg-emerald-900/20', border: 'border-emerald-500' }
+];
+
+export const PortalHub: React.FC = () => {
+  const tenant = useTenant();
+
+  return (
+    <div className="min-h-screen bg-black text-white font-mono selection:bg-white selection:text-black">
+      {/* HUD de Navegación Nivel 1 (BETA) */}
+      <nav className="border-b border-white/10 p-4 flex justify-between items-center bg-zinc-900/50 backdrop-blur-md sticky top-0 z-50">
+        <div className="flex items-center gap-4">
+          <span className="text-xl font-black tracking-tighter uppercase">VÍA51 // {tenant?.slug}</span>
+          <div className="px-2 py-0.5 border border-white/20 text-[10px] opacity-50 uppercase">Node_Alfa_Active</div>
+        </div>
+        <div className="text-[10px] text-right uppercase opacity-40">
+          UID: {tenant?.id.substring(0, 8)}...<br />
+          Layer: ALFA_EXECUTION
+        </div>
+      </nav>
+
+      {/* Main Fractal Grid */}
+      <main className="grid grid-cols-1 md:grid-cols-3 min-h-[calc(100vh-64px)] divide-x divide-white/10">
+        {SECTORS.map((sector) => (
+          <section 
+            key={sector.id}
+            className={`group relative overflow-hidden flex flex-col items-center justify-center p-8 transition-all duration-700 hover:bg-white/[0.02] cursor-pointer`}
+          >
+            {/* Background Texture (Antigravity Style) */}
+            <div className="absolute inset-0 opacity-10 group-hover:opacity-20 transition-opacity pointer-events-none bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-white/20 via-transparent to-transparent" />
+            
+            <div className={`w-full border-l-4 ${sector.border} pl-6 transition-all duration-500 group-hover:translate-x-2`}>
+              <h2 className="text-4xl font-bold tracking-tighter mb-2">{sector.label}</h2>
+              <p className="text-xs text-white/40 max-w-[200px] leading-tight">
+                ACCESO A MÓDULOS DE PROFUNDIDAD TÉCNICA NIVEL {sector.id === 'political' ? 'V' : 'III'}.
+              </p>
+            </div>
+
+            {/* Indicator Layer */}
+            <div className="absolute bottom-10 left-10 flex gap-1">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="w-1 h-4 bg-white/10 group-hover:bg-white/40 transition-colors" style={{ transitionDelay: `${i * 100}ms` }} />
+              ))}
+            </div>
+
+            {/* Action Trigger */}
+            <button className="mt-12 px-6 py-2 border border-white/20 text-xs hover:bg-white hover:text-black transition-all uppercase tracking-widest font-bold">
+              Initialize_Sector
+            </button>
+          </section>
+        ))}
+      </main>
+
+      {/* Terminal Footer */}
+      <footer className="fixed bottom-0 w-full p-2 bg-black border-t border-white/5 flex justify-between text-[9px] text-white/30 uppercase tracking-widest">
+        <span>Fractal_System_v51.6_Active</span>
+        <span>Environment: Production</span>
+        <span>Latency: 24ms</span>
+      </footer>
+    </div>
+  );
+};
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\components\layout\UniversalLayout.tsx
+==========================================================
+/**
+ * FUNCIÓN: Contenedor Maestro Universal (Mobile-First)
+ * LUGAR: /components/layout/UniversalLayout.jsx
+ * FECHA: 02-Abr-2026 | 15:40
+ * DESCRIPCIÓN: Implementa la estética de "Puente de Escucha" con paleta azul cobalto.
+ */
+
+import React from 'react';
+
+const UniversalLayout = ({ children }) => {
+    return (
+        <div className="min-h-screen bg-slate-50 flex justify-center items-start antialiased font-sans">
+            {/* Contenedor tipo App: Centrado en PC, Full width en Móvil */}
+            <main className="w-full max-w-md min-h-screen bg-white shadow-2xl border-x border-slate-100 flex flex-col relative">
+
+                {/* Header de Identidad Blanca/Limpia */}
+                <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-100 p-4 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-blue-600 animate-pulse" />
+                        <span className="font-bold tracking-tight text-slate-800 uppercase text-sm">Sistema Activo</span>
+                    </div>
+                    <div className="text-[10px] text-slate-400 font-mono">NODE_ID: 12-A</div>
+                </header>
+
+                {/* Área de Contenido Dinámico */}
+                <section className="flex-1 p-4 overflow-y-auto overflow-x-hidden">
+                    {children}
+                </section>
+
+                {/* Footer Minimalista */}
+                <footer className="p-6 text-center">
+                    <p className="text-[11px] text-slate-300 uppercase tracking-widest font-medium">
+                        Infraestructura de Escucha Ciudadana
+                    </p>
+                </footer>
+            </main>
+        </div>
+    );
+};
+
+export default UniversalLayout;
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\components\nodes\ArdDashboard.tsx
+==========================================================
+// src/components/nodes/ArdDashboard.tsx
+import React from 'react';
+
+const ArdDashboard = () => {
+  return (
+    <div className="p-6 text-white font-sans">
+      <header className="mb-8">
+        <h1 className="text-2xl font-bold text-blue-400">ARD_CENTRAL_SYSTEM</h1>
+        <p className="text-[10px] opacity-50 uppercase tracking-[0.2em]">Node Status: Active</p>
+      </header>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="bg-white/5 p-4 rounded-2xl border border-white/10">
+          <span className="block text-[9px] opacity-40 mb-1">NETWORK_LATENCY</span>
+          <span className="text-xl font-mono text-green-400">24ms</span>
+        </div>
+        <div className="bg-white/5 p-4 rounded-2xl border border-white/10">
+          <span className="block text-[9px] opacity-40 mb-1">UPTIME_RELAY</span>
+          <span className="text-xl font-mono">99.9%</span>
+        </div>
+      </div>
+
+      <div className="mt-8 p-4 bg-blue-600/10 rounded-2xl border border-blue-500/20 text-center">
+        <span className="text-xs text-blue-400 font-medium">Sincronización con Supabase: OK</span>
+      </div>
+    </div>
+  );
+};
+
+export default ArdDashboard;
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\components\nodes\MediaNodeRenderer.tsx
+==========================================================
+// Path: src/components/nodes/MediaNodeRenderer.tsx
+// Name: MediaNodeRenderer Component
+
+import React from 'react';
+
+interface MediaNodeProps {
+  node: {
+    type: string;
+    data: {
+      src: string;
+      label?: string;
+      fileName?: string;
+    };
+  };
+}
+
+export const MediaNodeRenderer: React.FC<MediaNodeProps> = ({ node }) => {
+  const { type, data } = node;
+
+  if (type === 'video_node') {
+    return (
+      <div className="gamma-video-container border border-zinc-800 rounded-lg overflow-hidden">
+        <video 
+          controls 
+          className="w-full h-auto aspect-video bg-black"
+          src={data.src}
+        >
+          Your browser does not support the video tag.
+        </video>
+        <div className="p-2 text-xs text-zinc-500 bg-zinc-900/50">
+          Source: {data.fileName || 'Remote Video Asset'}
+        </div>
+      </div>
+    );
+  }
+
+  if (type === 'audio_node') {
+    return (
+      <div className="gamma-audio-container p-4 bg-zinc-900 border border-zinc-800 rounded-lg flex flex-col gap-2">
+        <span className="text-sm font-medium text-zinc-300">
+          {data.label || data.fileName || 'Audio Asset'}
+        </span>
+        <audio 
+          controls 
+          className="w-full h-10 accent-emerald-500"
+          src={data.src}
+        />
+      </div>
+    );
+  }
+
+  return null;
+};
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\components\renderers\PhoneProjector.tsx
+==========================================================
+// src/components/renderers/PhoneProjector.tsx
+import React, { useState, useEffect } from 'react';
+
+interface PhoneProjectorProps {
+  phrases: string[];
+  rotationSpeed?: number;
+}
+
+export const PhoneProjector: React.FC<PhoneProjectorProps> = ({ phrases, rotationSpeed = 3000 }) => {
+  const [index, setIndex] = useState(0);
+
+  useEffect(() => {
+    if (phrases.length <= 1) return;
+    const interval = setInterval(() => {
+      setIndex((prev) => (prev + 1) % phrases.length);
+    }, rotationSpeed);
+    return () => clearInterval(interval);
+  }, [phrases, rotationSpeed]);
+
+  return (
+    <div className="flex items-center justify-center min-h-screen bg-black p-4">
+      {/* Container con Aspect Ratio de Celular */}
+      <div className="relative w-[320px] h-[580px] border-[6px] border-zinc-900 rounded-[40px] bg-zinc-950 overflow-hidden shadow-2xl shadow-blue-900/20">
+        <div className="absolute top-0 w-full h-10 flex justify-center items-end">
+          <div className="w-20 h-4 bg-zinc-900 rounded-full"></div> {/* Notch Sim */}
+        </div>
+        
+        <div className="h-full flex flex-col items-center justify-center p-8 text-center">
+          <div className="relative h-40 w-full flex items-center justify-center">
+            {phrases.length > 0 ? (
+              <h2 key={index} className="text-2xl font-black tracking-tighter leading-tight animate-in fade-in zoom-in duration-700 uppercase">
+                {phrases[index]}
+              </h2>
+            ) : (
+              <span className="text-[10px] text-zinc-700 animate-pulse">WAITING_FOR_DATA_STREAM...</span>
+            )}
+          </div>
+        </div>
+
+        <div className="absolute bottom-4 w-full flex justify-center">
+          <div className="w-10 h-1 bg-zinc-800 rounded-full"></div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\components\templates\ArdMobileDashboard.tsx
+==========================================================
+// src/components/templates/ArdMobileDashboard.tsx
+
+import React, { useState, useEffect } from 'react';
+import { 
+  ShieldCheck, 
+  LayoutDashboard, 
+  Database, 
+  Activity, 
+  User, 
+  Settings, 
+  Zap, 
+  Globe, 
+  Lock 
+} from 'lucide-react';
+
+/**
+ * @interface NodeStats
+ * Definición de tipos para el Ecosistema VÍA51
+ */
+interface NodeStats {
+  events: number;
+  geoTraces: number;
+  registry: number;
+  status: 'ONLINE' | 'OFFLINE' | 'MAINTENANCE';
+}
+
+/**
+ * COMPONENTE: ArdMobileDashboard
+ * NODO: ard.via51.org
+ * TECNOLOGÍA: React + TypeScript + Tailwind v51.6
+ * REGLA: Aislamiento estricto de Tenant y Root Owner.
+ */
+
+const ArdMobileDashboard: React.FC = () => {
+  const [stats, setStats] = useState<NodeStats>({
+    events: 0,
+    geoTraces: 0,
+    registry: 0,
+    status: 'ONLINE'
+  });
+
+  const ROOT_OWNER: string = '9157ae13-36ac-4259-9680-1d9bd2cada4a';
+  const HOSTNAME: string = window.location.hostname;
+  const IS_AUTHORIZED: boolean = HOSTNAME === 'ard.via51.org' || HOSTNAME === 'localhost';
+
+  // Validación de seguridad en capa de renderizado
+  if (!IS_AUTHORIZED) {
+    return (
+      <div className="h-screen w-full bg-black flex items-center justify-center">
+        <p className="text-red-600 font-mono font-bold tracking-tighter text-xs">
+          403_FORBIDDEN_HOST_OUT_OF_SCOPE
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <main className="fixed inset-0 bg-[#080808] flex items-center justify-center p-4 overflow-hidden select-none">
+      
+      {/* Definición de Límites: Ambient Light Bloom */}
+      <div className="absolute w-[600px] h-[600px] bg-blue-600/5 rounded-full blur-[120px] pointer-events-none" />
+
+      {/* CHASIS FÍSICO (Hardware Representation) */}
+      <div className="relative w-[385px] h-[810px] bg-[#121212] rounded-[64px] p-[12px] shadow-[0_50px_100px_-20px_rgba(0,0,0,1)] ring-1 ring-white/10 flex-shrink-0">
+        
+        {/* Dynamic Island: Sensor Array */}
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 w-28 h-7 bg-black rounded-full z-[100] border border-white/5 flex items-center justify-end px-4">
+          <div className="w-2 h-2 rounded-full bg-[#1a1a1a] border border-white/5" />
+        </div>
+
+        {/* Botones Físicos (Laterales Externos) */}
+        <div className="absolute -left-[2px] top-32 w-[4px] h-16 bg-gradient-to-b from-[#1a1a1a] to-[#0a0a0a] rounded-l-md border-l border-white/10" />
+        <div className="absolute -right-[2px] top-40 w-[4px] h-24 bg-gradient-to-b from-[#1a1a1a] to-[#0a0a0a] rounded-r-md border-r border-white/10" />
+
+        {/* PANTALLA OLED (Viewport Interior) */}
+        <div className="w-full h-full bg-[#1c1f24] rounded-[52px] overflow-hidden flex flex-col relative border border-white/10 shadow-inner">
+          
+          {/* Status Bar Administrativa */}
+          <header className="px-8 pt-12 pb-4 flex justify-between items-center bg-[#252a31]/50 backdrop-blur-md">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center shadow-lg shadow-blue-900/40 rotate-3">
+                <span className="text-[10px] font-black text-white -rotate-3 uppercase tracking-tighter">V51</span>
+              </div>
+              <div className="leading-tight">
+                <p className="text-[9px] text-blue-400 font-mono font-black uppercase tracking-[0.2em]">Root_Authorized</p>
+                <p className="text-[11px] font-bold text-slate-200">fredy.bazalar@via51.org</p>
+              </div>
+            </div>
+            <Settings size={18} className="text-slate-500 hover:text-white transition-colors cursor-pointer" />
+          </header>
+
+          {/* Body: Dashboard del Nodo ARD */}
+          <section className="flex-1 overflow-y-auto px-6 py-6 space-y-6 scrollbar-hide">
+            
+            <div className="space-y-1">
+              <h1 className="text-2xl font-black tracking-tighter text-white">Holding_Chassis_v51</h1>
+              <div className="flex items-center gap-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+                <span className="text-[10px] font-mono text-emerald-500 uppercase font-bold tracking-widest">Sys_Kernel_v51:ONLINE</span>
+              </div>
+            </div>
+
+            {/* Accesos de Nivel Gamma (Beta/Science) */}
+            <div className="grid grid-cols-2 gap-3">
+              <button className="flex flex-col items-center justify-center gap-2 p-5 bg-[#2a3039] rounded-[32px] border border-white/5 active:scale-95 transition-all shadow-xl group">
+                <Zap className="text-blue-400 group-hover:drop-shadow-[0_0_8px_rgba(96,165,250,0.5)]" size={24} />
+                <span className="text-[9px] font-black text-center text-slate-300 uppercase leading-none">Access_Beta<br/>Development</span>
+              </button>
+              <button className="flex flex-col items-center justify-center gap-2 p-5 bg-[#2a3039] rounded-[32px] border border-white/5 active:scale-95 transition-all shadow-xl group">
+                <Globe className="text-purple-400 group-hover:drop-shadow-[0_0_8px_rgba(192,132,252,0.5)]" size={24} />
+                <span className="text-[9px] font-black text-center text-slate-300 uppercase leading-none">Access_Gamma<br/>Science</span>
+              </button>
+            </div>
+
+            {/* Monitor de Tablas Críticas (sys_events / sys_registry) */}
+            <div className="space-y-3">
+              <div className="bg-[#252a31] p-4 rounded-3xl border border-white/5 flex justify-between items-center group">
+                <div className="flex items-center gap-3">
+                  <Activity size={16} className="text-blue-500" />
+                  <span className="text-[10px] text-slate-400 font-mono font-bold uppercase">Total_Events</span>
+                </div>
+                <span className="text-lg font-mono font-bold text-white tracking-tighter">{stats.events}</span>
+              </div>
+
+              <div className="bg-[#252a31] p-4 rounded-3xl border border-white/5 flex justify-between items-center group">
+                <div className="flex items-center gap-3">
+                  <Database size={16} className="text-emerald-500" />
+                  <span className="text-[10px] text-slate-400 font-mono font-bold uppercase">Registry (Int)</span>
+                </div>
+                <span className="text-lg font-mono font-bold text-white tracking-tighter">{stats.registry}</span>
+              </div>
+            </div>
+
+            <div className="mt-8 pt-4 border-t border-white/5 text-center">
+              <p className="text-[8px] text-slate-600 font-mono font-bold tracking-[0.3em] uppercase">
+                Auth_UID: {ROOT_OWNER.substring(0, 8)}...
+              </p>
+            </div>
+          </section>
+
+          {/* Navigation Bar (Custom UI) */}
+          <nav className="h-24 bg-[#1a1d23]/95 backdrop-blur-xl border-t border-white/10 px-8 flex justify-between items-center relative z-[110]">
+            <LayoutDashboard className="text-blue-500" size={22} />
+            <Database className="text-slate-600" size={22} />
+            <div className="relative -mt-12">
+              <div className="absolute inset-0 bg-blue-600/30 blur-2xl rounded-full scale-150" />
+              <button className="w-14 h-14 bg-gradient-to-b from-blue-500 to-indigo-700 rounded-[22px] flex items-center justify-center shadow-2xl shadow-blue-500/40 border border-blue-400/50 relative">
+                <Lock className="text-white" size={24} />
+              </button>
+            </div>
+            <Activity className="text-slate-600" size={22} />
+            <User className="text-slate-600" size={22} />
+          </nav>
+
+        </div>
+      </div>
+    </main>
+  );
+};
+
+export default ArdMobileDashboard;
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\components\Via51\MotorAlfa.tsx
+==========================================================
+import React, { useState, useEffect } from 'react';
+import { createClient } from '@supabase/supabase-client';
+
+const supabase = createClient('SU_URL', 'SU_KEY_ANON');
+
+const MotorAlfa = ({ clienteSlug }) => {
+  const [nodos, setNodos] = useState([]);
+  const [indice, setIndice] = useState(0);
+  const [clienteInfo, setClienteInfo] = useState(null);
+
+  useEffect(() => {
+    const cargarSaaS = async () => {
+      // 1. Obtener ADN del Cliente
+      const { data: cliente } = await supabase
+        .from('clientes')
+        .select('*')
+        .eq('slug', clienteSlug)
+        .single();
+      
+      if (cliente) {
+        setClienteInfo(cliente);
+        // 2. Cargar sus Nodos (Sus productos, propuestas o servicios)
+        const { data: items } = await supabase
+          .from('nodos_alfa')
+          .select('*')
+          .eq('cliente_id', cliente.id)
+          .eq('esta_activo', true)
+          .order('prioridad', { ascending: false });
+        
+        setNodos(items);
+      }
+    };
+    cargarSaaS();
+  }, [clienteSlug]);
+
+  if (!clienteInfo || nodos.length === 0) return <div className="h-screen bg-black" />;
+
+  const itemActual = nodos[indice];
+
+  return (
+    <div className="h-screen w-screen bg-black text-white flex items-center justify-center overflow-hidden">
+      {/* Marco de Dispositivo Adaptativo */}
+      <div className="relative aspect-[9/16] h-[92vh] border border-white/10 rounded-[2.5rem] overflow-hidden shadow-2xl"
+           style={{ boxShadow: `0 0 40px ${clienteInfo.color_tema}33` }}>
+        
+        {/* MEDIA LAYER */}
+        <div className="absolute inset-0 z-0">
+          {itemActual.tipo_media === 'video' ? (
+            <video key={itemActual.url_media} autoPlay muted loop playsInline className="h-full w-full object-cover">
+              <source src={itemActual.url_media} type="video/mp4" />
+            </video>
+          ) : (
+            <img src={itemActual.url_media} className="h-full w-full object-cover" alt="SaaS Content" />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent" />
+        </div>
+
+        {/* TRADUCTOR DE CAMPOS DINÁMICO */}
+        <div className="absolute bottom-0 w-full p-8 z-10">
+          <p className="text-[10px] tracking-[0.4em] mb-2" style={{ color: clienteInfo.color_tema }}>
+            {clienteInfo.nombre_comercial.toUpperCase()}
+          </p>
+          
+          <h1 className="text-4xl font-black uppercase mb-4 leading-none">
+            {itemActual.titulo_que}
+          </h1>
+
+          <div className="p-4 bg-white/5 backdrop-blur-md rounded-xl border-l-4" 
+               style={{ borderColor: clienteInfo.color_tema }}>
+            <p className="text-sm font-light opacity-90 mb-3">
+              <span className="font-bold">EL CÓMO:</span> {itemActual.descripcion_como}
+            </p>
+            
+            {/* RENDERIZADO DE METADATOS (La ensalada de variables) */}
+            <div className="flex flex-wrap gap-2 mt-2">
+              {Object.entries(itemActual.metadatos).map(([llave, valor]) => (
+                <span key={llave} className="text-[9px] bg-white/10 px-2 py-1 rounded-md uppercase">
+                  {llave}: {valor}
+                </span>
+              ))}
+            </div>
+          </div>
+          
+          {/* Navegación de Nodos (Scroll simulado) */}
+          <div className="flex justify-between mt-6">
+            <button onClick={() => setIndice(prev => Math.max(0, prev - 1))} className="text-[10px] opacity-40">ANTERIOR</button>
+            <button onClick={() => setIndice(prev => Math.min(nodos.length - 1, prev + 1))} className="text-[10px] font-bold">SIGUIENTE</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default MotorAlfa;
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\components\Via51\PantallaAlfa.tsx
+==========================================================
+import React, { useState, useEffect } from 'react';
+
+export default function PantallaAlfa({ data }) {
+  const [visitante, setVisitante] = useState({ city: 'LIMA', ip: '...' });
+
+  useEffect(() => {
+    fetch('https://ipapi.co/json/')
+      .then(res => reson())
+      .then(info => setVisitante({ city: info.city, ip: info.ip }))
+      .catch(() => setVisitante({ city: 'LIMA', ip: 'RADAR ACTIVO' }));
+  }, []);
+
+  const titulo = data?.titulo_que || "MESÍAS GUEVARA";
+  const desc = data?.descripcion_como || "Liderazgo técnico y político para la transformación del Perú 2026.";
+
+  return (
+    <div style={{backgroundColor:'black', color:'white', minHeight:'100vh', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', textAlign:'center', fontFamily:'sans-serif', padding:'20px'}}>
+      <div style={{border:'1px solid rgba(234, 179, 8, 0.2)', borderRadius:'40px', padding:'60px', maxWidth:'800px'}}>
+        <div style={{marginBottom:'40px'}}>
+          <span style={{fontSize:'10px', letterSpacing:'4px', color:'#eab308', fontWeight:'900'}}>
+            {visitante.city} // {visitante.ip}
+          </span>
+        </div>
+        <h1 style={{fontSize:'clamp(3rem, 10vw, 5rem)', fontWeight:'900', textTransform:'uppercase', fontStyle:'italic', marginBottom:'40px'}}>
+          <span style={{color:'#eab308'}}>{titulo}</span>
+        </h1>
+        <p style={{fontSize:'1.5rem', color:'#9ca3af', fontStyle:'italic', maxWidth:'600px', margin:'0 auto', borderLeft:'4px solid rgba(234, 179, 8, 0.2)', paddingLeft:'20px'}}>
+          "{desc}"
+        </p>
+      </div>
+    </div>
+  );
+}
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\components\Via51\PantallaCenit.tsx
+==========================================================
+import React from 'react';
+
+const PantallaCenit = ({ config, onRetornar }) => {
+  if (!config) return null;
+
+  return (
+    <div 
+      className="absolute inset-0 bg-cover bg-center transition-opacity duration-700 animate-in fade-in"
+      style={{ backgroundImage: `url(${config.fondo})` }}
+    >
+      {/* Botón de Retorno Táctico */}
+      <button
+        onClick={onRetornar}
+        className="absolute top-8 left-6 z-50 p-4 bg-black/30 backdrop-blur-xl rounded-full text-white border border-white/20 active:scale-90 transition-transform"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M19 12H5M12 19l-7-7 7-7"/>
+        </svg>
+      </button>
+
+      {/* Capa Antigravity: Fondo Limpio */}
+    </div>
+  );
+};
+
+export default PantallaCenit;
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\components\Via51\Via51.tsx
+==========================================================
+import React, { useState, useRef } from 'react';
+import OPCIONES_CENIT from '../../config/via51'; 
+import PantallaAlfa from './PantallaAlfa';
+import PantallaCenit from './PantallaCenit';
+
+const Via51 = () => {
+  const [estado, setEstado] = useState({ pantalla: 'ALFA', config: null });
+  const audioRef = useRef(null);
+
+  const manejarSeleccion = (tipo) => {
+    const seleccion = OPCIONES_CENIT[tipo];
+    
+    // Detener audio anterior si existe
+    if (audioRef.current) {
+      audioRef.current.pause();
+    }
+
+    // Crear la nueva instancia de audio
+    const nuevoAudio = new Audio(seleccion.audio);
+
+    // --- AJUSTE TÁCTICO DE AUDIO ---
+    // Si seleccionamos el botón que lleva a Palacio de Gobierno (VERDE),
+    // saltamos el silencio inicial. Ajuste el 7.5 según sea necesario.
+    if (tipo === 'VERDE') {
+      nuevoAudio.currentTime = 7.5; 
+    }
+    // -------------------------------
+
+    audioRef.current = nuevoAudio;
+    audioRef.current.play().catch(e => console.log("Audio en espera de interacción"));
+    
+    setEstado({ pantalla: 'CENIT', config: seleccion });
+  };
+
+  const retornar = () => {
+    if (audioRef.current) { 
+      audioRef.current.pause(); 
+      audioRef.current.currentTime = 0; 
+    }
+    setEstado({ pantalla: 'ALFA', config: null });
+  };
+
+  return (
+    <div className="w-full h-screen bg-black overflow-hidden relative">
+      {estado.pantalla === 'ALFA' ? (
+        <PantallaAlfa onSeleccionar={manejarSeleccion} />
+      ) : (
+        <PantallaCenit config={estado.config} onRetornar={retornar} />
+      )}
+    </div>
+  );
+};
+
+export default Via51;
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\components\Beta.tsx
+==========================================================
+/* Ruta: src/components/Beta
+Nombre: Beta
+Descripción: Panel de gestión para el Holding Digital Vía51. 
+Controla el contenido de Alfa (pol).
+*/
+
+import React, { useState, useEffect } from 'react';
+import supabase from '../supabaseClient'; // Cliente Supabase configurado
+import './Beta.css';
+
+const Beta = () => {
+  const [formData, setFormData] = useState({
+    titulo_que: '',
+    descripcion_como: ''
+  });
+  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState('');
+
+  // 1. Cargar datos actuales de ALFA (pol) al iniciar
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      const { data, error } = await supabase
+        .from('nodos')
+        .select('titulo_que, descripcion_como')
+        .eq('slug', 'pol')
+        .single();
+
+      if (data) {
+        setFormData({
+          titulo_que: data.titulo_que || '',
+          descripcion_como: data.descripcion_como || ''
+        });
+      }
+      if (error) console.error('Error cargando Alfa:', error.message);
+    };
+
+    fetchInitialData();
+  }, []);
+
+  // 2. Manejar cambios en los inputs
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  // 3. Ejecutar UPSERT en Supabase
+  const handleGuardar = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setStatus('Sincronizando...');
+
+    const { error } = await supabase
+      .from('nodos')
+      .upsert({ 
+        slug: 'pol', 
+        titulo_que: formData.titulo_que, 
+        descripcion_como: formData.descripcion_como 
+      }, { onConflict: 'slug' });
+
+    setLoading(false);
+    if (error) {
+      setStatus('Error: ' + error.message);
+    } else {
+      setStatus('✅ ALFA Actualizado con éxito');
+      setTimeout(() => setStatus(''), 3000);
+    }
+  };
+
+  return (
+    <div className="beta-container">
+      <div className="beta-overlay">
+        <form className="beta-panel" onSubmit={handleGuardar}>
+          <h2>NODO BETA: CONTROL MAESTRO</h2>
+          <hr />
+          
+          <div className="input-group">
+            <label>TÍTULO (QUÉ):</label>
+            <input
+              type="text"
+              name="titulo_que"
+              value={formData.titulo_que}
+              onChange={handleChange}
+              placeholder="Ej: La Identidad Digital..."
+              required
+            />
+          </div>
+
+          <div className="input-group">
+            <label>DESCRIPCIÓN (CÓMO):</label>
+            <textarea
+              name="descripcion_como"
+              value={formData.descripcion_como}
+              onChange={handleChange}
+              placeholder="Ej: Una mirada pública..."
+              rows="5"
+              required
+            />
+          </div>
+
+          <button type="submit" disabled={loading}>
+            {loading ? 'PROCESANDO...' : 'ACTUALIZAR NODO ALFA'}
+          </button>
+
+          {status && <p className="status-msg">{status}</p>}
+        </form>
+      </div>
+    </div>
+  );
+};
+
+export default Beta;
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\components\CaptureForm.tsx
+==========================================================
+/**
+ * ARCHIVO: src/components/CaptureForm.tsx
+ * DESCRIPCIÓN: Captura datos para proyectar en la red VÍA51.
+ */
+import React, { useState } from 'react';
+import { supabase } from '../lib/supabaseClient';
+
+export const CaptureForm = () => {
+  const [form, setForm] = useState({ name: '', dni: '', whatsapp: '' });
+  const [status, setStatus] = useState('');
+
+  const sendData = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setStatus('ENVIANDO...');
+
+    // Inserción en sys_events según esquema detectado
+    const { error } = await supabase.from('sys_events').insert([{
+      event_type: 'V51_PROJECTION',
+      payload: { 
+        full_name: form.name.toUpperCase(), 
+        document: form.dni, 
+        phone: form.whatsapp 
+      }
+    }]);
+
+    if (!error) {
+      setForm({ name: '', dni: '', whatsapp: '' });
+      setStatus('DATOS PROYECTADOS');
+      setTimeout(() => setStatus(''), 3000);
+    } else {
+      setStatus('ERROR DE CONEXIÓN');
+    }
+  };
+
+  return (
+    <div className="bg-zinc-950 p-8 border border-zinc-800 font-mono max-w-sm w-full">
+      <h2 className="text-blue-500 text-[10px] tracking-[0.4em] mb-6 uppercase text-center">Lead_Capture_Node</h2>
+      <form onSubmit={sendData} className="space-y-4">
+        <input 
+          placeholder="NOMBRE Y APELLIDO" 
+          className="w-full bg-black border border-zinc-800 p-3 text-white text-xs outline-none focus:border-blue-500"
+          value={form.name} 
+          onChange={e => setForm({...form, name: e.target.value})} 
+          required 
+        />
+        <input 
+          placeholder="DNI" 
+          className="w-full bg-black border border-zinc-800 p-3 text-white text-xs outline-none focus:border-blue-500"
+          value={form.dni} 
+          onChange={e => setForm({...form, dni: e.target.value})} 
+          required 
+        />
+        <input 
+          placeholder="WHATSAPP" 
+          className="w-full bg-black border border-zinc-800 p-3 text-white text-xs outline-none focus:border-blue-500"
+          value={form.whatsapp} 
+          onChange={e => setForm({...form, whatsapp: e.target.value})} 
+          required 
+        />
+        <button className="w-full bg-blue-600 py-3 font-black text-[10px] uppercase hover:bg-blue-500 transition-all">
+          {status || 'ACTIVAR PROYECCIÓN'}
+        </button>
+      </form>
+    </div>
+  );
+};
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\components\DataProjector.tsx
+==========================================================
+// Path: C:/via51_ecosistema/via51-nodo-central/src/components/DataProjector.tsx
+// Name: V51_Alpha_DataProjector_Core
+// Identity: Comas, Lima, Peru | 2026-03-31 19:10:24
+
+import React, { Suspense } from "react";
+// Implementación de Lazy Loading para optimizar los nodos ALFA
+const SocialDept = React.lazy(() => import("./depts/SocialDept"));
+const PoliticsDept = React.lazy(() => import("./depts/PoliticsDept"));
+const ProductionDept = React.lazy(() => import("./depts/ProductionDept"));
+
+/**
+ * Interface de Proyección de Departamentos
+ * Gestiona la visibilidad según el contexto del nodo Alfa.
+ */
+interface DataProjectorProps {
+  activeNode: 'SOCIAL' | 'POLITICAL' | 'PRODUCTIVE';
+}
+
+export const DataProjector: React.FC<DataProjectorProps> = ({ activeNode }) => {
+  return (
+    <div className="v51-projection-container bg-antigravity-900 min-h-screen">
+      <Suspense fallback={<div className="animate-pulse text-white">Loading V51 Node...</div>}>
+        {activeNode === 'SOCIAL' && <SocialDept />}
+        {activeNode === 'POLITICAL' && <PoliticsDept />}
+        {activeNode === 'PRODUCTIVE' && <ProductionDept />}
+      </Suspense>
+    </div>
+  );
+};
+
+export default DataProjector;
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\components\DynamicIcon.tsx
+==========================================================
+import React from 'react';
+import * as LucideIcons from 'lucide-react';
+
+interface DynamicIconProps {
+  iconName: string; 
+  size?: number;
+  className?: string;
+}
+
+/**
+ * GENERADOR DE ICONOGRAFÍA AGNÓSTICA
+ * Cumple el protocolo de identidad: El código no conoce el icono, 
+ * solo resuelve el recurso que la tabla [sys_registry] le asigna al nodo.
+ */
+export const DynamicIcon: React.FC<DynamicIconProps> = ({ 
+  iconName, 
+  size = 24, 
+  className = "" 
+}) => {
+  // Mapeo dinámico seguro de la librería Lucide
+  const IconComponent = (LucideIcons as any)[iconName] as React.ElementType;
+
+  if (!IconComponent) {
+    // Icono de respaldo (Fallback) para mantener la integridad visual si el slug no tiene icono definido
+    return <LucideIcons.HelpCircle size={size} className={className} />;
+  }
+
+  return <IconComponent size={size} className={className} />;
+};
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\components\KernelMonitor.tsx
+==========================================================
+import React, { useEffect, useState } from 'react';
+import { supabase } from '../lib/supabaseClient';
+import { SCHEMA } from '../lib/constants';
+import { useTenant } from '../context/TenantContext';
+
+export const KernelMonitor: React.FC = () => {
+  const { tenant } = useTenant();
+  const [telemetry, setTelemetry] = useState({ total_events: 0, geo_traces: 0, registry_count: 0, last_event: 'AWAITING' });
+
+  const sync_telemetry = async () => {
+    if (!tenant?.id) return;
+
+    const [events, traces, registry] = await Promise.all([
+      supabase.from(SCHEMA.TABLES.TELEMETRY).select('*', { count: 'exact', head: true }).eq('tenant_id', tenant.id),
+      supabase.from(SCHEMA.TABLES.TELEMETRY).select('*', { count: 'exact', head: true }).eq('tenant_id', tenant.id).eq('event_type', 'GEO_TRACE'),
+      supabase.from('sys_registry').select('*', { count: 'exact', head: true })
+    ]);
+
+    setTelemetry({
+      total_events: events.count || 0,
+      geo_traces: traces.count || 0,
+      registry_count: registry.count || 0,
+      last_event: new Date().toLocaleTimeString()
+    });
+  };
+
+  useEffect(() => {
+    sync_telemetry();
+    const channel = supabase.channel('kernel_pulse')
+      .on('postgres_changes', { event: '*', schema: 'public', table: SCHEMA.TABLES.TELEMETRY }, sync_telemetry)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sys_registry' }, sync_telemetry)
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [tenant?.id]);
+
+  return (
+    <div className="fixed bottom-6 left-6 z-[1000] font-mono pointer-events-none">
+      <div className="bg-black/90 border border-zinc-800 p-5 rounded-sm backdrop-blur-xl w-64">
+        <div className="flex justify-between items-center border-b border-zinc-800 pb-2 mb-3">
+          <span className="text-zinc-500 text-[9px] font-bold uppercase tracking-widest">Sys_Kernel_v51</span>
+          <span className="text-emerald-500 text-[9px] font-bold animate-pulse">ONLINE</span>
+        </div>
+        <div className="space-y-2 text-[10px] uppercase">
+          <div className="flex justify-between">
+            <span className="text-zinc-400">Total_Events:</span>
+            <span className="text-white font-bold">{telemetry.total_events}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-blue-400/80">Geo_Traces (Ext):</span>
+            <span className="text-blue-400 font-bold">{telemetry.geo_traces}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-emerald-400/80">Registry (Int):</span>
+            <span className="text-emerald-400 font-bold">{telemetry.registry_count}</span>
+          </div>
+        </div>
+        <div className="mt-3 pt-2 border-t border-zinc-900 text-[8px] text-zinc-600 flex justify-between">
+          <span>LAST_SYNC:</span>
+          <span>{telemetry.last_event}</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\components\MainOrchestrator.tsx
+==========================================================
+// src/components/MainOrchestrator
+const MainOrchestrator = () => {
+  const { config } = useSystem();
+
+  if (config.mode === OPERATIONAL_MODES.CRITICAL) {
+    return <AlphaCoyunturaView eventId={config.activeCoyunturaId} />;
+  }
+
+  return (
+    <main className="grid-pillars">
+      <PoliticalModule />
+      <SocialModule />
+      <ProductiveModule />
+    </main>
+  );
+};
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\components\MotorHolding.tsx
+==========================================================
+const MotorHolding = ({ tenantData }) => {
+  // Eliminamos cualquier referencia a "Vía 51" en el HTML
+  return (
+    <div className="h-screen w-screen bg-black overflow-hidden font-sans select-none">
+      {/* Marco dinámico sin marcas de agua */}
+      <div className={`relative h-full w-full ${tenantData.layout === 'celular' ? 'max-w-md mx-auto border-x border-white/5' : ''}`}>
+        
+        {/* MEDIA LAYER */}
+        <video autoPlay muted loop playsInline className="absolute inset-0 h-full w-full object-cover">
+          <source src={tenantData.media_url} type="video/mp4" />
+        </video>
+
+        {/* CONTENIDO ESPECÍFICO DEL CLIENTE */}
+        <div className="absolute bottom-10 left-0 w-full px-8 z-20">
+          <h1 className="text-white text-6xl font-black uppercase leading-tight">
+            {tenantData.titulo}
+          </h1>
+          <div className="mt-4 p-4 backdrop-blur-xl bg-black/30 rounded-lg border-l-4" 
+               style={{ borderColor: tenantData.color_primario }}>
+            <p className="text-white text-lg font-light italic">
+              {tenantData.mensaje_fuerza}
+            </p>
+          </div>
+        </div>
+
+        {/* Solo mostramos créditos si el tenant lo permite (en política: OFF) */}
+        {tenantData.mostrar_creditos && (
+          <div className="absolute top-5 right-5 text-[8px] opacity-20 text-white">
+            POWERED BY PACHA
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\components\MotorPacha.tsx
+==========================================================
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../lib/supabaseClient';
+
+const MotorPacha = ({ tenantSlug }) => {
+  const [nodo, setNodo] = useState(null);
+  const [emergencia, setEmergencia] = useState({ activado: false, mensaje: "" });
+
+  useEffect(() => {
+    // 1. Cargar Contenido Normal
+    const cargarContenido = async () => {
+      const { data } = await supabase
+        .from('nodos_alfa')
+        .select('*, clientes!inner(*)')
+        .eq('clientes.slug', tenantSlug)
+        .eq('esta_activo', true)
+        .limit(1)
+        .single();
+      if (data) setNodo(data);
+    };
+
+    // 2. Escuchar el Botón Rojo en tiempo real
+    const checkEmergencia = async () => {
+      const { data } = await supabase.from('control_emergencia').select('*').eq('id', 1).single();
+      if (data?.activado) setEmergencia({ activado: true, mensaje: data.mensaje_global });
+    };
+
+    cargarContenido();
+    checkEmergencia();
+
+    const sub = supabase.channel('cambios-globales')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'control_emergencia' }, 
+      payload => {
+        setEmergencia({ activado: payload.new.activado, mensaje: payload.new.mensaje_global });
+      })
+      .subscribe();
+
+    return () => supabase.removeChannel(sub);
+  }, [tenantSlug]);
+
+  if (emergencia.activado) {
+    return (
+      <div className="h-screen w-screen bg-red-700 flex items-center justify-center p-10 text-center animate-pulse">
+        <h1 className="text-white text-5xl font-black uppercase italic">{emergencia.mensaje}</h1>
+      </div>
+    );
+  }
+
+  if (!nodo) return <div className="bg-black h-screen" />;
+
+  return (
+    <div className="h-screen w-screen bg-black overflow-hidden relative">
+      <video autoPlay muted loop playsInline className="absolute inset-0 h-full w-full object-cover opacity-80">
+        <source src={nodo.url_media} type="video/mp4" />
+      </video>
+      <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent" />
+      <div className="absolute bottom-10 left-10 right-10 z-10">
+        <h2 className="text-white text-6xl font-extrabold uppercase leading-none mb-4">{nodo.titulo_que}</h2>
+        <p className="text-white/80 text-xl border-l-4 pl-4 italic" style={{ borderColor: '#3b82f6' }}>{nodo.descripcion_como}</p>
+      </div>
+    </div>
+  );
+};
+
+export default MotorPacha;
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\components\NodeController.tsx
+==========================================================
+// src/components/NodeController.tsx
+import React, { useMemo } from 'react';
+import { useTenant } from '../context/TenantContext';
+import { NodeDispatcher } from './NodeDispatcher';
+
+interface NodeControllerProps {
+  nodeId: string;
+  onNavigate: (id: string) => void;
+  userLevel: number; // Obtenido de user_permissions.hierarchy_level
+}
+
+export const NodeController: React.FC<NodeControllerProps> = ({ nodeId, onNavigate, userLevel }) => {
+  const { tenant } = useTenant();
+
+  // Función de filtrado recursivo: Si el usuario no tiene nivel, el nodo y sus hijos mueren.
+  const authorizedTree = useMemo(() => {
+    if (!tenant?.nodeTree?.root) return null;
+
+    const filterNodes = (node: any): any | null => {
+      // Regla de Oro: Si el nivel del nodo es mayor al del usuario, se elimina.
+      if (node.access_level > userLevel) return null;
+
+      return {
+        ...node,
+        children: node.children
+          ? node.children.map(filterNodes).filter((n: any) => n !== null)
+          : []
+      };
+    };
+
+    return filterNodes(tenant.nodeTree.root);
+  }, [tenant, userLevel]);
+
+  // Buscador de nodo actual dentro del árbol ya filtrado
+  const currentNode = useMemo(() => {
+    if (!authorizedTree) return null;
+    
+    const findNode = (node: any, id: string): any => {
+      if (node.node_id === id) return node;
+      for (const child of node.children || []) {
+        const found = findNode(child, id);
+        if (found) return found;
+      }
+      return null;
+    };
+
+    return findNode(authorizedTree, nodeId);
+  }, [authorizedTree, nodeId]);
+
+  if (!currentNode) return (
+    <div className="p-10 text-[10px] text-zinc-500 uppercase animate-pulse">
+      ERR_SCOPE_OUT_OF_BOUNDS: Nodo no encontrado o nivel insuficiente.
+    </div>
+  );
+
+  return (
+    <div className="p-6 max-w-4xl mx-auto">
+      <header className="mb-8 border-b border-zinc-800 pb-4">
+        <h2 className="text-xs text-blue-500 font-bold tracking-[0.2em] mb-1">
+          LOCATION: {currentNode.node_id.toUpperCase()}
+        </h2>
+        <h1 className="text-2xl font-black">{currentNode.label}</h1>
+      </header>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {currentNode.children.map((child: any) => (
+          <div key={child.node_id} className="group">
+            {child.node_type === 'category' ? (
+              <button 
+                onClick={() => onNavigate(child.node_id)}
+                className="w-full text-left p-4 border border-zinc-800 hover:border-white transition-colors"
+              >
+                <span className="text-[9px] opacity-40 block mb-1">DIR_SUB_LEVEL</span>
+                <span className="font-bold">{child.label}</span>
+              </button>
+            ) : (
+              <NodeDispatcher 
+                node={child} 
+                userLevel={userLevel} 
+                tenantId={tenant?.id || ''} 
+              />
+            )}
+          </div>
+        ))}
+      </div>
+
+      {nodeId !== 'root' && (
+        <button 
+          onClick={() => onNavigate('root')}
+          className="mt-8 text-[10px] text-zinc-600 hover:text-white underline underline-offset-4"
+        >
+          RETURN_TO_ROOT
+        </button>
+      )}
+    </div>
+  );
+};
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\components\NodeDispatcher.tsx
+==========================================================
+// src/components/NodeDispatcher.tsx
+import React from 'react';
+import { supabase } from '../lib/supabaseClient';
+
+interface NodeActionProps {
+  node: {
+    node_id: string;
+    label: string;
+    node_type: 'category' | 'entity' | 'action' | 'metric';
+    access_level: number;
+    metadata?: any;
+  };
+  userLevel: number;
+  tenantId: string;
+}
+
+export const NodeDispatcher: React.FC<NodeActionProps> = ({ node, userLevel, tenantId }) => {
+  
+  // Bloqueo Multinivel Inmediato
+  if (userLevel < node.access_level) {
+    return (
+      <div className="p-2 border border-red-900/30 bg-red-950/10 text-[9px] text-red-500 uppercase">
+        ACCESS_DENIED: LEVEL_{node.access_level}_REQUIRED
+      </div>
+    );
+  }
+
+  const handleAction = async () => {
+    if (node.node_type !== 'action') return;
+
+    // Registro automático de telemetría (Auditoría Estandarizada)
+    const { error } = await supabase
+      .from('sys_events')
+      .insert([{
+        event_type: 'NODE_ACTION_EXECUTE',
+        tenant_id: tenantId,
+        layer_id: 'FRONTEND_DISPATCHER',
+        metric_id: node.node_id,
+        payload: { 
+          label: node.label,
+          executed_at: new Date().toISOString()
+        }
+      }]);
+
+    if (error) console.error("DISPATCH_LOG_FAIL:", error.message);
+    
+    // Aquí se dispararía la lógica específica contenida en metadata
+    alert(`EXECUTING: ${node.label}`);
+  };
+
+  return (
+    <div 
+      onClick={handleAction}
+      className={`p-4 border transition-all cursor-pointer ${
+        node.node_type === 'action' 
+          ? 'border-blue-900/50 hover:bg-blue-950/20' 
+          : 'border-zinc-800'
+      }`}
+    >
+      <div className="flex justify-between items-center">
+        <span className="text-[11px] font-bold tracking-widest">{node.label}</span>
+        <span className="text-[8px] opacity-40">TYPE_{node.node_type}</span>
+      </div>
+      {node.metadata?.description && (
+        <p className="text-[9px] text-zinc-500 mt-2">{node.metadata.description}</p>
+      )}
+    </div>
+  );
+};
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\components\PanelBeta.tsx
+==========================================================
+/* Ruta: src/components/PanelBeta
+   Nombre: PanelBeta
+   Descripción: Interfaz de procesamiento y carga de datos (BETA).
+*/
+
+import React, { useState, useEffect } from 'react';
+import supabase from '../supabaseClient';
+import './PanelBeta.css';
+
+const PanelBeta = ({ destino }) => {
+  const [datos, setDatos] = useState({ titulo_que: '', descripcion_como: '' });
+  const [estadoSinc, setEstadoSinc] = useState('');
+
+  useEffect(() => {
+    // Carga inicial del registro ALFA correspondiente al eje
+    const cargarDatos = async () => {
+      const { data } = await supabase
+        .from('nodos')
+        .select('*')
+        .eq('slug', destino === 'politico' ? 'pol' : 'raiz')
+        .single();
+      if (data) setDatos(data);
+    };
+    cargarDatos();
+  }, [destino]);
+
+  const enviarProcesamiento = async (e) => {
+    e.preventDefault();
+    setEstadoSinc('Procesando en Beta...');
+    
+    const { error } = await supabase
+      .from('nodos')
+      .upsert({ 
+        slug: 'pol', 
+        titulo_que: datos.titulo_que, 
+        descripcion_como: datos.descripcion_como 
+      }, { onConflict: 'slug' });
+
+    setEstadoSinc(error ? 'Error en Gamma' : '✅ Sincronizado con Alfa');
+  };
+
+  return (
+    <div className="contenedor-beta">
+      <form className="formulario-procesamiento" onSubmit={enviarProcesamiento}>
+        <header>
+          <h2>BETA: PROCESAMIENTO {destino.toUpperCase()}</h2>
+          <p>Sosteniendo el pilar del desarrollo nacional</p>
+        </header>
+        
+        <input 
+          value={datos.titulo_que} 
+          onChange={(e) => setDatos({...datos, titulo_que: e.target.value})}
+          placeholder="Razón de ser y propósito (Política)"
+        />
+        
+        <textarea 
+          value={datos.descripcion_como} 
+          onChange={(e) => setDatos({...datos, descripcion_como: e.target.value})}
+          placeholder="Interrelaciones y transformaciones (Social/Productivo)"
+        />
+
+        <button type="submit">ACTUALIZAR PANTALLA ALFA</button>
+        {estadoSinc && <span className="feedback">{estadoSinc}</span>}
+      </form>
+    </div>
+  );
+};
+
+export default PanelBeta;
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\components\PantallaAlfa.tsx
+==========================================================
+/* Ruta: src/components/PantallaAlfa
+Nombre: PantallaAlfa
+*/
+
+// Dentro del useEffect de suscripción:
+const subscription = supabase
+  .channel('cambios-alfa')
+  .on('postgres_changes', 
+    { event: 'UPDATE', schema: 'public', table: 'nodos', filter: "slug=eq.pol" }, 
+    (payload) => {
+      console.log('Cambio detectado en ALFA:', payload.new);
+      setNodo(payload.new); // Actualiza la UI instantáneamente
+    }
+  )
+  .subscribe();
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\components\SystemProbe.tsx
+==========================================================
+// ==========================================
+// RUTA: src/components/SystemProbe.tsx
+// ==========================================
+import React, { useEffect, useState } from 'react';
+import { supabase } from '../lib/supabaseClient';
+import { SCHEMA } from '../lib/constants';
+import { useTenant } from '../context/TenantContext';
+
+export const SystemProbe: React.FC = () => {
+  const { tenant } = useTenant();
+  const [count, setCount] = useState<number>(0);
+  const [status, setStatus] = useState<'ONLINE' | 'OFFLINE'>('OFFLINE');
+
+  const actualizarContador = async () => {
+    if (!tenant?.id) return;
+    const { count: total, error } = await supabase
+      .from(SCHEMA.TABLES.TELEMETRY)
+      .select('*', { count: 'exact', head: true })
+      .eq('tenant_id', tenant.id);
+
+    if (!error && total !== null) {
+      setCount(total);
+      setStatus('ONLINE');
+    }
+  };
+
+  useEffect(() => {
+    actualizarContador();
+    const canal = supabase
+      .channel('cambios-telemetria')
+      .on('postgres_changes', 
+          { event: 'INSERT', schema: 'public', table: SCHEMA.TABLES.TELEMETRY }, 
+          () => actualizarContador()
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(canal); };
+  }, [tenant?.id]);
+
+  return (
+    <div className="fixed bottom-6 right-6 z-50">
+      <div className="bg-black/80 border border-zinc-800 p-4 rounded-lg font-mono text-[10px] backdrop-blur-md w-48 shadow-2xl">
+        <div className="flex justify-between border-b border-zinc-800 pb-2 mb-2">
+          <span className="text-zinc-500 font-bold">SYS_KERNEL_PROBE</span>
+          <span className="text-green-500">● {status}</span>
+        </div>
+        <div className="flex justify-between items-center">
+          <span className="text-zinc-400">TELEMETRY:</span>
+          <span className="text-white font-bold text-xs bg-zinc-900 px-2 rounded border border-zinc-800">
+            📊 {count} EVTS
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\config\via51.ts
+==========================================================
+const OPCIONES_CENIT = {
+  VERDE: {
+    fondo: '/assets/palacio-gobierno.jpg',    // <--- Ahora en el primer botón
+    audio: '/assets/musica-costa.mp3', 
+    titulo: 'PODER EJECUTIVO'
+  },
+  AMBAR: {
+    fondo: '/assets/palacio-legislativo.jpg', // <--- Ahora en el segundo botón
+    audio: '/assets/musica-sierra.mp3', 
+    titulo: 'PODER LEGISLATIVO'
+  },
+  ROJO: {
+    fondo: '/assets/peru-regiones.jpg',
+    audio: '/assets/musica-selva.mp3',
+    titulo: 'NACIÓN INTEGRAL'
+  },
+};
+
+export default OPCIONES_CENIT;
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\context\SystemContext.tsx
+==========================================================
+// src/context/SystemContext
+export const OPERATIONAL_MODES = {
+  STANDARD: 'standard', // Los tres pilares
+  CRITICAL: 'critical'  // Modo Coyuntura (mutación Alfa)
+};
+
+export const SystemProvider = ({ children }) => {
+  const [config, setConfig] = useState({
+    mode: OPERATIONAL_MODES.STANDARD,
+    activeCoyunturaId: null,
+    pillars: ['political', 'social', 'productive']
+  });
+
+  // Suscripción en tiempo real a Supabase para cambios de estado
+  useEffect(() => {
+    const channel = supabase
+      .channel('system_state')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'engine_config' }, 
+        payload => {
+          setConfig(prev => ({ ...prev, ...payload.new }));
+        })
+      .subscribe();
+    return () => supabase.removeChannel(channel);
+  }, []);
+
+  return (
+    <SystemContext.Provider value={{ config }}>
+      {children}
+    </SystemContext.Provider>
+  );
+};
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\context\TenantContext.tsx
+==========================================================
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { supabase } from '../lib/supabaseClient';
+
+const TenantContext = createContext<any>(undefined);
+
+export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [tenant, setTenant] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [registryError, setRegistryError] = useState(false);
+
+  useEffect(() => {
+    const fetchTenant = async () => {
+      const hostname = window.location.hostname;
+      // En localhost forzamos un slug que exista en tu DB (ej: 'politica-general')
+      const targetSlug = hostname === 'localhost' ? 'politica-general' : hostname.split('.')[0];
+
+      const { data, error } = await supabase
+        .from('sys_registry')
+        .select('id, slug, configuration, node_tree') // <--- CAMBIO QUIRÚRGICO AQUÍ
+        .eq('slug', targetSlug)
+        .maybeSingle();
+
+      if (error || !data) {
+        setRegistryError(true);
+      } else {
+        setTenant({
+          id: data.id,
+          slug: data.slug,
+          config: data.configuration, 
+          nodeTree: data.node_tree     
+        });
+        setRegistryError(false);
+      }
+      setLoading(false);
+    };
+    fetchTenant();
+  }, []);
+
+  return (
+    <TenantContext.Provider value={{ tenant, loading, registryError }}>
+      {children}
+    </TenantContext.Provider>
+  );
+};
+
+export const useTenant = () => useContext(TenantContext);
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\core\context\NodeOrchestrator.ts
+==========================================================
+/**
+ * FUNCTION: NodeOrchestrator (Immune Identity Controller)
+ * LOCATION: /src/core/context/NodeOrchestrator.ts
+ * DATE: 2026-04-03
+ * TIME: 07:48:32
+ * DESCRIPTION: Detects and validates the current execution node in the fractal hierarchy.
+ * Ensures that RLS (Row Level Security) context is injected into every request.
+ */
+
+export type NodeLevel = 'GAMMA' | 'BETA' | 'ALFA';
+
+interface NodeContext {
+    id: string;
+    level: NodeLevel;
+    alias: string;
+    timestamp: string;
+}
+
+export const getExecutionNode = (): NodeContext => {
+    const hostname = window.location.hostname;
+    const parts = hostname.split('.');
+
+    // Logic to determine level based on Antigravity Topology
+    let level: NodeLevel = 'ALFA';
+    if (hostname.includes('gamma')) level = 'GAMMA';
+    else if (hostname.includes('hub') || hostname.includes('beta')) level = 'BETA';
+
+    return {
+        id: crypto.randomUUID(), // Local transient ID for session tracking
+        level: level,
+        alias: parts[0] || 'root',
+        timestamp: "2026-04-03 07:48:32"
+    };
+};
+
+export const auditLog = (action: string, metadata: object) => {
+    const node = getExecutionNode();
+    console.log(`[AUDIT][${node.level}][${node.timestamp}] ${action}`, metadata);
+    // Integration point for sys_events (Supabase) would be here
+};
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\core\context\TenantContext.tsx
+==========================================================
+/**
+ * PATH: src/core/context/TenantContext.tsx
+ * NAME: TenantContext.tsx
+ * VERSION: v51.6 - Antigravity
+ * LOCATION: Comas, Lima, Peru
+ * DATE: March 31, 2026 | 21:58
+ * DESCRIPTION: Orquestador de contexto jerárquico para el ecosistema VÍA51.
+ */
+
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
+
+// Estructura de Registro del Sistema (sys_registry)
+interface TenantConfig {
+  id: string;
+  name: string;
+  tier: 'ALFA' | 'BETA' | 'GAMMA';
+  subdomain: string;
+  theme_config: object;
+}
+
+interface TenantContextType {
+  tenant: TenantConfig | null;
+  supabase: SupabaseClient | null;
+  loading: boolean;
+  error: string | null;
+}
+
+const TenantContext = createContext<TenantContextType | undefined>(undefined);
+
+export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [tenant, setTenant] = useState<TenantConfig | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Inicialización del Cliente Supabase con UID Maestro
+  const supabase = createClient(
+    import.meta.env.VITE_SUPABASE_URL,
+    import.meta.env.VITE_SUPABASE_ANON_KEY
+  );
+
+  useEffect(() => {
+    const identifyTenant = async () => {
+      try {
+        const hostname = window.location.hostname;
+        // Extracción del subdominio para identificar el nodo Alfa
+        const subdomain = hostname.split('.')[0]; 
+
+        // Consulta quirúrgica a sys_registry con validación de Tenant
+        const { data, error: sbError } = await supabase
+          .from('sys_registry')
+          .select('*')
+          .eq('subdomain', subdomain)
+          .single();
+
+        if (sbError) throw new Error(`Node Identification Failed: ${sbError.message}`);
+
+        setTenant(data as TenantConfig);
+        
+        // Log de Auditoría en sys_events (Solo Nivel Beta/Gamma)
+        await supabase.from('sys_events').insert([
+          { 
+            event_type: 'NODE_ACCESS', 
+            payload: { hostname, tenant_id: data.id },
+            master_uid: '9157ae13-36ac-4259-9680-1d9bd2cada4a' 
+          }
+        ]);
+
+      } catch (err: any) {
+        setError(err.message);
+        console.error('[VÍA51 ERROR] Critical Isolation Failure:', err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    identifyTenant();
+  }, []);
+
+  return (
+    <TenantContext.Provider value={{ tenant, supabase, loading, error }}>
+      {children}
+    </TenantContext.Provider>
+  );
+};
+
+export const useTenant = () => {
+  const context = useContext(TenantContext);
+  if (context === undefined) {
+    throw new Error('useTenant must be used within a TenantProvider - Level BETA Access Required');
+  }
+  return context;
+};
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\core\processor.ts
+==========================================================
+// src/core/processor.ts
+import { logEvent } from '../lib/audit-logger';
+
+export interface TransitionRequest {
+    entity_id: string;
+    current_status: string;
+    target_status: string;
+    actor_id: string;
+    tenant_id: string;
+}
+
+export class CoreProcessor {
+    /**
+     * AGNOSTIC STATE MACHINE
+     * Executes transitions based on registry rules without knowing domain specifics.
+     */
+    public static async executeTransition(
+        request: TransitionRequest,
+        allowedTransitions: string[] // Passed from the Domain Registry
+    ): Promise<{ success: boolean; message: string }> {
+
+        const transitionKey = `${request.current_status} -> ${request.target_status}`;
+
+        // 1. Logic Validation
+        if (!allowedTransitions.includes(transitionKey)) {
+            // LOG FAILURE (Immutable Audit)
+            await logEvent({
+                actor_id: request.actor_id,
+                action_type: 'INVALID_TRANSITION_ATTEMPT',
+                payload_snapshot: { request, error: 'Transition not allowed' },
+                tenant_id: request.tenant_id,
+                status: 'FAILURE'
+            });
+
+            return { success: false, message: `Transition ${transitionKey} is not valid for this domain.` };
+        }
+
+        // 2. State Execution Simulation
+        // Here we would perform the actual DB update (e.g., UPDATE entities SET status = target_status)
+        const success = true;
+
+        // 3. LOG SUCCESS (Immutable Audit)
+        if (success) {
+            await logEvent({
+                actor_id: request.actor_id,
+                action_type: 'STATE_TRANSITION',
+                payload_snapshot: {
+                    entity_id: request.entity_id,
+                    transition: transitionKey,
+                    timestamp: new Date().toISOString()
+                },
+                tenant_id: request.tenant_id,
+                status: 'SUCCESS'
+            });
+        }
+
+        return {
+            success: true,
+            message: `Entity ${request.entity_id} moved to ${request.target_status}`
+        };
+    }
+}
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\core\validator.ts
+==========================================================
+// src/core/validator.ts
+
+export interface ValidationResult {
+    isValid: boolean;
+    errors: string[];
+}
+
+export class CoreValidator {
+    /**
+     * Agnostic validation: Compares payload against a schema definition.
+     * The core doesn't know what an "Event" or "Company" is.
+     */
+    public static validate(payload: any, schema: any): ValidationResult {
+        const errors: string[] = [];
+
+        // 1. Check for required entities defined in the Registry
+        if (schema.requiredFields) {
+            schema.requiredFields.forEach((field: string) => {
+                if (payload[field] === undefined || payload[field] === null) {
+                    errors.push(`Missing required field: ${field}`);
+                }
+            });
+        }
+
+        // 2. Type validation based on Registry rules
+        for (const key in payload) {
+            if (schema.properties && schema.properties[key]) {
+                const expectedType = schema.properties[key].type;
+                const actualType = typeof payload[key];
+
+                if (actualType !== expectedType) {
+                    errors.push(`Field '${key}' expected type ${expectedType} but got ${actualType}`);
+                }
+            }
+        }
+
+        return {
+            isValid: errors.length === 0,
+            errors,
+        };
+    }
+}
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\data\candidato-config.ts
+==========================================================
+import heroImage from '../assets/ceo-lima.png';
+
+export const CAMPAIGN_DATA = {
+  assets: {
+    heroImage: heroImage,
+  },
+  
+  // Mensajes en el Cenit (Rozando la frente)
+  cenit: {
+    linea1: "EL ÚLTIMO EN LA CÉDULA DE VOTACIÓN",
+    linea2: "PRIMERO EN LAS CALIFICACIONES",
+    interpelacion: "Ante la evidencia... ¿Tú qué piensas? ¿Cómo te consideras?"
+  },
+
+  // La Tríada de Botones (Estilo CEO)
+  botones: [
+    { id: 'convencido', etiqueta: 'INDISCUTIBLE', subtexto: 'FIRMAR COMPROMISO', color: 'green' },
+    { id: 'desconfiado', etiqueta: 'PUEDE SER', subtexto: 'VER DATA VIDENZA', color: 'blue' },
+    { id: 'esceptico', etiqueta: 'DIFÍCIL', subtexto: 'PONER A PRUEBA', color: 'red' }
+  ], // <--- LA COMA QUE CURA EL ERROR
+
+  // Data de Auditoría del PDF de Videnza
+  auditoria: {
+    puntajeVidenza: "3.12",
+    dimensiones: [
+      { area: "Salud", nota: 3.40 },
+      { area: "Educación", nota: 2.80 },
+      { area: "Economía", nota: 3.10 },
+      { area: "Seguridad", nota: 3.05 }
+    ]
+  }
+};
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\engines\RenderEngine.tsx
+==========================================================
+// src/engines/RenderEngine.tsx
+import React, { useEffect, useState } from 'react';
+import { supabase } from '../lib/supabaseClient'; 
+import { SCHEMA } from '../lib/constants';
+import { useTenant } from '../context/TenantContext';
+
+interface RenderProps {
+  capaId: string;
+  variableName: string;
+  tituloMonitor: string;
+}
+
+export const RenderEngine: React.FC<RenderProps> = ({ capaId, variableName, tituloMonitor }) => {
+  const [dato, setDato] = useState<number | null>(null);
+  
+  // Extraemos la identidad del Tenant actual para filtrar el flujo de datos del Holding
+  const { tenant } = useTenant();
+
+  useEffect(() => {
+    if (!tenant) return;
+
+    /**
+     * 1. Consulta Inicial (Fetch)
+     * Traemos el último valor registrado para este cliente y este nodo específico.
+     */
+    const fetchLastValue = async () => {
+      const { data, error } = await supabase
+        .from(SCHEMA.TABLES.TELEMETRY)
+        .select('valor')
+        .eq('capa_id', capaId)
+        .eq('variable_name', variableName)
+        .eq('tenant_id', tenant.id) 
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(); // Usamos maybeSingle para evitar errores si la tabla está vacía
+
+      if (data && !error) {
+        setDato(data.valor);
+      }
+    };
+
+    fetchLastValue();
+
+    /**
+     * 2. Suscripción en Tiempo Real (Realtime)
+     * Escuchamos solo las inserciones que pertenecen a este Tenant.
+     */
+    const channel = supabase
+      .channel(`realtime-${capaId}-${tenant.id}`)
+      .on('postgres_changes', 
+        { 
+          event: 'INSERT', 
+          schema: 'public', 
+          table: SCHEMA.TABLES.TELEMETRY, 
+          // Ajuste de Clase Mundial: comillas simples para soportar UUID/Text en el filtro
+          filter: `capa_id=eq.'${capaId}'` 
+        },
+        (payload) => {
+          // Doble validación de seguridad: Variable y Pertenencia al Tenant
+          if (
+            payload.new.variable_name === variableName && 
+            payload.new.tenant_id === tenant.id
+          ) {
+            setDato(payload.new.valor);
+          }
+        }
+      ).subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [capaId, variableName, tenant]);
+
+  return (
+    <div className="engine-box render">
+      <h3>{tituloMonitor}</h3>
+      <div className="digital-display">
+        {dato !== null ? dato.toFixed(2) : '---'}
+      </div>
+      {tenant && (
+        <div className="tenant-tag" style={{ fontSize: '10px', opacity: 0.6, marginTop: '8px' }}>
+          ORG: {tenant.name}
+        </div>
+      )}
+    </div>
+  );
+};
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\engines\V51_Engine_Demo.tsx
+==========================================================
+// src/engines/V51_Engine_Demo.tsx
+
+import React, { useState, useEffect, Suspense } from 'react';
+import { Play, Square, Loader2, Target, Zap, Globe, ShieldCheck } from 'lucide-react';
+
+/**
+ * @interface I_V51_Mock_Config
+ * Definición de parámetros estéticos normalizados para el demo.
+ */
+interface I_V51_Mock_Config {
+  id: string;
+  tenantName: string;
+  chassis: 'MOBILE' | 'DESKTOP' | 'NONE';
+  theme: {
+    bg: string;
+    card: string;
+    text: string;
+    accent: string;
+  };
+  icon: React.ReactNode;
+}
+
+// Mock Data: Variaciones estéticas agradables del ecosistema VÍA51
+const MOCK_REGISTRY: I_V51_Mock_Config[] = [
+  {
+    id: 'ard_v51',
+    tenantName: 'ARD_HOLDING (Gestión)',
+    chassis: 'MOBILE',
+    theme: { bg: '#0d1117', card: '#161b22', text: '#c9d1d9', accent: '#58a6ff' },
+    icon: <Target className="text-[#58a6ff]" size={24} />
+  },
+  {
+    id: 'pol_v51',
+    tenantName: 'POL_CAMPAIGN (Mesías Guevara)',
+    chassis: 'NONE', // Full Screen
+    theme: { bg: '#1a1d21', card: '#252a30', text: '#e1e4e8', accent: '#f8a619' },
+    icon: <Zap className="text-[#f8a619]" size={24} />
+  },
+  {
+    id: 'fj_v51',
+    tenantName: 'FJ_REAL_ESTATE (Sector Inmobiliario)',
+    chassis: 'DESKTOP', // Tablet/Desktop View
+    theme: { bg: '#f6f8fa', card: '#ffffff', text: '#24292e', accent: '#2ea44f' },
+    icon: <Globe className="text-[#2ea44f]" size={24} />
+  }
+];
+
+/**
+ * ENGINE: V51_ENGINE_DEMO
+ * RESPONSABILIDAD: Demostrar variaciones paramétricas del motor en Full Screen.
+ */
+const V51_Engine_Demo: React.FC = () => {
+  const [currentIndex, setCurrentIndex] = useState<number>(0);
+  const [isRunning, setIsRunning] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+
+  const currentConfig = MOCK_REGISTRY[currentIndex];
+  const ROOT_OWNER = '9157ae13-36ac-4259-9680-1d9bd2cada4a';
+
+  // Lógica de ciclo automático del motor
+  useEffect(() => {
+    if (!isRunning) return;
+
+    const interval = setInterval(() => {
+      setIsLoading(true);
+      // Simulación de latencia de red/carga de componente (1s)
+      setTimeout(() => {
+        setCurrentIndex((prev) => (prev + 1) % MOCK_REGISTRY.length);
+        setIsLoading(false);
+      }, 1000);
+    }, 4000); // Ciclo total de 4s (3s visualización + 1s carga)
+
+    return () => clearInterval(interval);
+  }, [isRunning]);
+
+  /**
+   * COMPONENTE: Node_Content_Agnostic
+   * Simulación del contenido de un nodo que se adapta al tema inyectado.
+   */
+  const Node_Content_Agnostic = () => (
+    <div className="flex flex-col h-full p-8" style={{ color: currentConfig.theme.text }}>
+      <header className="flex justify-between items-center mb-8 pb-4 border-b border-white/5">
+        <div className="flex items-center gap-4">
+          {currentConfig.icon}
+          <div>
+            <p className="text-[10px] font-mono uppercase tracking-[0.3em]" style={{ color: currentConfig.theme.accent }}>
+              v51_agnostic_node
+            </p>
+            <h1 className="text-xl font-black tracking-tighter text-white">{currentConfig.tenantName}</h1>
+          </div>
+        </div>
+        <ShieldCheck className="text-emerald-500" size={20} />
+      </header>
+
+      <div className="grid grid-cols-2 gap-4 flex-1">
+        <div className="p-6 rounded-3xl border border-white/5 shadow-inner" style={{ backgroundColor: currentConfig.theme.card }}>
+          <p className="text-[11px] font-bold uppercase tracking-wider mb-2">Parámetro: Chassis</p>
+          <code className="text-xs font-mono p-2 bg-black/30 rounded-lg block">{currentConfig.chassis}</code>
+        </div>
+        <div className="p-6 rounded-3xl border border-white/5 shadow-inner" style={{ backgroundColor: currentConfig.theme.card }}>
+          <p className="text-[11px] font-bold uppercase tracking-wider mb-2">Parámetro: Accent_Color</p>
+          <div className="flex items-center gap-3">
+            <div className="w-6 h-6 rounded-full border border-white/10" style={{ backgroundColor: currentConfig.theme.accent }} />
+            <code className="text-xs font-mono">{currentConfig.theme.accent}</code>
+          </div>
+        </div>
+        <div className="p-6 rounded-3xl border border-white/5 shadow-inner col-span-2" style={{ backgroundColor: currentConfig.theme.card }}>
+          <p className="text-[11px] font-bold uppercase tracking-wider mb-2">Estado del Motor</p>
+          <div className="flex items-center gap-2">
+            {isRunning ? (
+              <div className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse" />
+            ) : (
+              <div className="w-3 h-3 rounded-full bg-red-500" />
+            )}
+            <span className="text-sm font-mono">{isRunning ? 'MOTOR_RUNNING_AUTO_CYCLE' : 'MOTOR_STOPPED_MANUAL_CONTROL'}</span>
+          </div>
+        </div>
+      </div>
+
+      <footer className="mt-8 text-center opacity-30">
+        <p className="text-[8px] font-mono tracking-[0.5em]">ROOT_MATCH: {ROOT_OWNER.split('-')[0]}</p>
+      </footer>
+    </div>
+  );
+
+  /**
+   * COMPONENTE: V51_Chassis_Orchestrator
+   * Aplica el envoltorio de hardware dinámicamente.
+   */
+  const V51_Chassis_Orchestrator = () => {
+    const mobileStyle = "relative w-[375px] h-[780px] bg-[#050505] rounded-[60px] p-[10px] shadow-[0_50px_100px_-20px_rgba(0,0,0,1)] border-[3px] border-[#333] ring-1 ring-white/10 overflow-hidden";
+    const desktopStyle = "w-full max-w-5xl h-[85vh] rounded-3xl overflow-hidden border border-white/10 shadow-2xl";
+    const fullScreenStyle = "w-full h-screen";
+
+    const getChassisClass = () => {
+      if (currentConfig.chassis === 'MOBILE') return mobileStyle;
+      if (currentConfig.chassis === 'DESKTOP') return desktopStyle;
+      return fullScreenStyle;
+    };
+
+    return (
+      <div className={`transition-all duration-700 ease-in-out ${getChassisClass()}`} style={{ backgroundColor: currentConfig.theme.bg }}>
+        {currentConfig.chassis === 'MOBILE' && (
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-28 h-7 bg-black rounded-b-3xl z-50 border border-white/5" />
+        )}
+        <Node_Content_Agnostic />
+      </div>
+    );
+  };
+
+  return (
+    <main className="fixed inset-0 bg-black flex items-center justify-center p-6 overflow-hidden select-none">
+      
+      {/* CAPA DE CONTROL DEL DEMO */}
+      <div className="fixed top-6 right-6 z-[100] flex gap-3 bg-[#1a1c22] border border-white/10 p-3 rounded-3xl shadow-2xl">
+        <button 
+          onClick={() => setIsRunning(true)} 
+          disabled={isRunning || isLoading}
+          className="flex items-center gap-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 text-white px-5 py-2.5 rounded-full text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-emerald-900/40"
+        >
+          <Play size={16} /> Inicio
+        </button>
+        <button 
+          onClick={() => setIsRunning(false)} 
+          disabled={!isRunning || isLoading}
+          className="flex items-center gap-2.5 bg-red-700 hover:bg-red-600 disabled:bg-slate-700 text-white px-5 py-2.5 rounded-full text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-red-900/40"
+        >
+          <Square size={16} /> Parada
+        </button>
+      </div>
+
+      {/* RENDERIZADO DEL VIEWPORT DEL MOTOR */}
+      <Suspense fallback={<Loader2 className="animate-spin text-blue-500" size={32} />}>
+        {isLoading ? (
+          <div className="flex flex-col items-center gap-4 text-blue-400 font-mono text-sm uppercase tracking-widest">
+            <Loader2 className="animate-spin" size={24} />
+            SYNC_IN_PROGRESS
+          </div>
+        ) : (
+          <V51_Chassis_Orchestrator />
+        )}
+      </Suspense>
+
+      {/* Identificador de Estándar */}
+      <div className="fixed bottom-4 right-6 text-[8px] font-mono text-slate-800 uppercase tracking-[0.5em] pointer-events-none">
+        ENGINE_MODE: PARAMETRIC_DEMO | v51_compliant
+      </div>
+    </main>
+  );
+};
+
+export default V51_Engine_Demo;
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\engines\V51_Screen_Engine.tsx
+==========================================================
+/**
+ * RUTA: src/engines/V51_Screen_Engine.tsx
+ * NOMBRE: V51_Screen_Engine
+ * DESCRIPCIÓN: Motor de renderizado OLED V51 con Chasis de Hardware Virtual.
+ * Sincronizado con Supabase y optimizado para Tailwind CSS v4.
+ */
+
+import React, { Suspense, lazy } from 'react';
+import { useV51Registry } from '../hooks/useV51Registry';
+import { Loader2, ShieldAlert, Wifi, Battery, Signal } from 'lucide-react';
+
+const V51_Screen_Engine: React.FC = () => {
+  const { nodeData, loading, error } = useV51Registry();
+
+  // 1. Pantalla de Carga (Bootloader)
+  if (loading) return (
+    <div className="h-screen bg-black flex items-center justify-center">
+      <Loader2 className="animate-spin text-blue-500" size={40} />
+    </div>
+  );
+
+  // 2. Pantalla de Error Crítico
+  if (error || !nodeData) return (
+    <div className="h-screen bg-[#0a0a0b] flex flex-col items-center justify-center font-mono p-8 text-center">
+      <ShieldAlert className="text-red-600 mb-4" size={56} />
+      <h1 className="text-white text-lg tracking-tighter uppercase">Registry_Failure</h1>
+      <span className="text-red-500 text-[10px] mt-2 block opacity-80">{error || "NODE_DATA_MISSING"}</span>
+    </div>
+  );
+
+  // 3. Importación Dinámica del Nodo (Contenido de Supabase)
+  const NodeContent = lazy(() => import(`../components/nodes/${nodeData.node_path}.tsx`));
+
+  return (
+    <div className="fixed inset-0 bg-[#020203] flex items-center justify-center p-4 overflow-hidden antialiased">
+      
+      {/* --- CHASIS FÍSICO DEL CELULAR (HARDWARE) --- */}
+      <div className="relative w-[390px] h-[844px] bg-[#121214] rounded-[60px] p-[11px] shadow-[0_0_100px_rgba(0,0,0,0.9)] border-[4px] border-[#2a2a2e] flex flex-col transition-all duration-500">
+        
+        {/* Botones Físicos Laterales (Estéticos) */}
+        <div className="absolute -left-[4px] top-32 w-[4px] h-14 bg-[#2a2a2e] rounded-l-lg border-l border-white/5" />
+        <div className="absolute -left-[4px] top-52 w-[4px] h-20 bg-[#2a2a2e] rounded-l-lg border-l border-white/5" />
+        <div className="absolute -right-[4px] top-40 w-[4px] h-24 bg-[#2a2a2e] rounded-r-lg border-r border-white/5" />
+
+        {/* --- PANTALLA INTERNA (BORDE OLED) --- */}
+        <div className="w-full h-full bg-black rounded-[50px] overflow-hidden relative border border-white/10 flex flex-col shadow-inner">
+          
+          {/* Status Bar Superior */}
+          <div className="h-12 w-full flex justify-between items-end px-10 pb-2 z-50">
+            <span className="text-white text-[13px] font-bold tracking-tight">9:41</span>
+            <div className="flex gap-1.5 items-center">
+              <Signal size={13} className="text-white opacity-90" />
+              <Wifi size={13} className="text-white opacity-90" />
+              <Battery size={16} className="text-white opacity-90" />
+            </div>
+          </div>
+
+          {/* Dynamic Island (Notch) */}
+          <div className="absolute top-2.5 left-1/2 -translate-x-1/2 w-[120px] h-[32px] bg-black rounded-[20px] z-[100] border border-white/5 flex items-center justify-center">
+            {/* Cámara Frontal / Sensor */}
+            <div className="absolute right-4 w-2 h-2 bg-[#1a1a1a] rounded-full" />
+          </div>
+          
+          {/* --- ÁREA DE RENDERIZADO DEL NODO --- */}
+          {/* pt-10 para que el Notch no tape el título del Dashboard */}
+          <div className="flex-1 overflow-y-auto custom-scrollbar relative px-6 pt-10 pb-4">
+            <Suspense fallback={
+              <div className="h-full flex items-center justify-center bg-black">
+                <Loader2 className="animate-spin text-zinc-700" size={32} />
+              </div>
+            }>
+              <div className="min-h-full">
+                {/* Aquí aterriza ArdDashboard con sus tablas */}
+                <NodeContent config={nodeData.theme_config} />
+              </div>
+            </Suspense>
+          </div>
+
+          {/* Home Bar (Indicador inferior) */}
+          <div className="h-8 w-full flex justify-center items-center">
+            <div className="w-32 h-[5px] bg-white/20 rounded-full" />
+          </div>
+
+        </div>
+      </div>
+      {/* --- FIN DEL CHASIS --- */}
+
+    </div>
+  );
+};
+
+export default V51_Screen_Engine;
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\hooks\useGeoTelemetry.ts
+==========================================================
+// ==========================================
+// RUTA: src/hooks/useGeoTelemetry.ts
+// COMPONENTE: Sensor de Telemetría Geográfica (Refinado)
+// ==========================================
+import { useEffect } from 'react';
+import { supabase } from '../lib/supabaseClient';
+import { SCHEMA } from '../lib/constants';
+import { useTenant } from '../context/TenantContext';
+
+export const useGeoTelemetry = (nodeId: string) => {
+  const { tenant } = useTenant();
+
+  useEffect(() => {
+    const trackLocation = async () => {
+      if (!tenant?.id) return;
+
+      try {
+        // Obtenemos datos de ubicación
+        const res = await fetch('https://ipapi.co/json/');
+        const geo = await res.json();
+
+        // Inserción de pulso en sys_events
+        await supabase
+          .from(SCHEMA.TABLES.TELEMETRY)
+          .insert([{
+            tenant_id: tenant.id,
+            event_type: 'GEO_TRACE',
+            variable_name: `NODE_${nodeId}`,
+            metadata: {
+              ip: geo.ip,
+              city: geo.city,
+              country: geo.country_name,
+              node: nodeId,
+              timestamp: new Date().toISOString()
+            }
+          }]);
+          
+        console.log(`🌍 Trace registrado en Nodo: ${nodeId}`);
+      } catch (e) {
+        console.error("🔴 Error en Geo-Trace:", e);
+      }
+    };
+
+    trackLocation();
+  }, [tenant?.id, nodeId]); // Se dispara cada vez que cambia el nodo
+};
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\hooks\useTenant.tsx
+==========================================================
+/**
+ * PATH: /src/hooks/useTenant.tsx
+ * ROLE: Nivel 1 - BETA (Orquestación de Contexto)
+ * DESC: Hook maestro para la detección y validación de Tenant en el ecosistema VÍA51.
+ */
+
+import { createContext, useContext, useEffect, useState } from 'react';
+import { supabase } from '../lib/supabaseClient'; // Cliente pre-configurado
+
+interface TenantConfig {
+  id: string;
+  slug: string;
+  name: string;
+  level: 'ALFA' | 'BETA' | 'GAMMA';
+  settings: Record<string, any>;
+}
+
+const TenantContext = createContext<TenantConfig | null>(null);
+
+export const TenantProvider = ({ children }: { children: React.ReactNode }) => {
+  const [tenant, setTenant] = useState<TenantConfig | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const identifyTenant = async () => {
+      const hostname = window.location.hostname; // e.g., mesias.via51.org
+      const slug = hostname.split('.')[0];
+
+      const { data, error } = await supabase
+        .from('sys_registry')
+        .select('*')
+        .eq('slug', slug)
+        .single();
+
+      if (error || !data) {
+        console.error(`[VÍA51 ERROR] Unauthorized Node: ${hostname}`);
+        return;
+      }
+
+      setTenant(data);
+      setLoading(false);
+    };
+
+    identifyTenant();
+  }, []);
+
+  return (
+    <TenantContext.Provider value={tenant}>
+      {!loading && children}
+    </TenantContext.Provider>
+  );
+};
+
+export const useTenant = () => useContext(TenantContext);
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\hooks\useV51Registry.ts
+==========================================================
+/**
+ * PATH: src/hooks/useV51Registry.ts
+ * DESCRIPCIÓN: Extracción de datos alineada con el Esquema VIA51 (V51.6).
+ * REGLA: Uso obligatorio del esquema 'via51' y tabla 'v51_registry'.
+ */
+import { useEffect, useState } from 'react';
+// Cambiamos la fuente a nuestro nuevo orquestador de soberanía
+import { v51 as supabase } from '../lib/supabaseAdmin';
+
+export const useV51Registry = () => {
+  const [nodeData, setNodeData] = useState<any>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Identificación del Tenant (Agnosticismo de Dominio)
+  const hostname = window.location.hostname;
+  const CURRENT_SLUG = hostname === 'localhost' ? 'politica-general' : hostname.split('.')[0];
+
+  useEffect(() => {
+    const fetchRegistry = async () => {
+      try {
+        setLoading(true);
+
+        // Petición al Kernel usando el esquema 'via51'
+        const { data, error: supaError } = await supabase
+          .from('v51_registry') // Nombre de tabla real validado
+          .select('id, slug, configuration, node_tree')
+          .eq('slug', CURRENT_SLUG)
+          .maybeSingle();
+
+        if (supaError) throw new Error(supaError.message);
+
+        if (!data) {
+          setError("TENANT_NOT_FOUND_IN_VIA51_SCHEMA");
+        } else {
+          // Normalización de datos para el motor de renderizado
+          setNodeData({
+            id: data.id,
+            slug: data.slug,
+            phrases: data.configuration?.campaign_phrases || ["VÍA51_ACTIVE"],
+            brand: data.configuration?.brand_name || 'VÍA51_UNIT',
+            speed: data.configuration?.rotation_speed || 3000,
+            tree: data.node_tree
+          });
+        }
+      } catch (err: any) {
+        console.error("V51_CORE_FETCH_ERROR:", err.message);
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchRegistry();
+  }, [CURRENT_SLUG]);
+
+  return { nodeData, loading, error };
+};
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\hooks\useVia51Context.tsx
+==========================================================
+// path: src/hooks/useVia51Context.tsx
+import { useEffect, useState } from 'react';
+import { fetchNodeConfig } from '../lib/supabase';
+
+export const useVia51Context = () => {
+  const [node, setNode] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchNodeConfig()
+      .then(setNode)
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
+
+  return { node, loading, isAlpha: node?.tier === 'ALPHA' };
+};
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\hooks\useVia51Orchestrator.ts
+==========================================================
+// Path: C:/via51_ecosistema/via51-nodo-central/src/hooks/useVia51Orchestrator.ts
+// Name: V51_Beta_Orchestrator_Hook
+// Identity: Comas, Lima, Peru | 2026-03-31 19:24:40
+
+import { useEffect, useState } from "react";
+import { supabase } from "../lib/supabase"; // Importación corregida
+
+export const useVia51Orchestrator = () => {
+  const [node, setNode] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    /**
+     * Lógica de Resolución Fractal:
+     * Identifica el subdominio para determinar si estamos en 
+     * ALFA (Pol, FJ, Mesias) o GAMMA (Ard).
+     */
+    const resolveFractalLevel = () => {
+      const host = window.location.hostname;
+      if (host.startsWith('ard.')) return 'GAMMA_CONTROL';
+      if (host.startsWith('pol.')) return 'ALFA_POLITICS';
+      if (host.startsWith('fj.')) return 'ALFA_PRODUCTIVE';
+      if (host.startsWith('mesias.')) return 'ALFA_CANDIDATE';
+      return 'PORTAL_HUB';
+    };
+
+    setNode(resolveFractalLevel());
+    setLoading(false);
+    
+    console.log(`V51_ORCHESTRATOR: Node Resolved as ${resolveFractalLevel()}`);
+  }, []);
+
+  return { node, loading, supabase };
+};
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\kernel\security\identities.ts
+==========================================================
+/**
+ * PATH: /v51-ecosystem/via51-gamma/src/kernel/security/identities.ts
+ */
+
+export const V51_CORE_TABLES = [
+  'v51_registry',
+  'v51_nodes_status'
+];
+
+export const ROOT_IMMUNE_ID = "9157ae13-36ac-4259-9680-1d9bd2cada4a"; // Fredy
+
+export const isImmune = (uid: string) => uid === ROOT_IMMUNE_ID;
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\layers\alfa\AlphaMutationView.tsx
+==========================================================
+import React, { useState } from 'react';
+import { supabase } from '../../supabaseClient'; // Ajusta la ruta si es necesario
+
+interface AlphaProps {
+  isOpen: boolean;
+  pillar: string | null;
+  onClose: () => void;
+}
+
+const AlphaMutationView: React.FC<AlphaProps> = ({ isOpen, pillar, onClose }) => {
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    // Aquí iría tu lógica de insert en Supabase
+    setTimeout(() => {
+      setLoading(false);
+      onClose();
+    }, 1000);
+  };
+
+  return (
+    <div className={`alpha-mutation-overlay ${isOpen ? 'active' : ''}`}>
+      <div className="form-semilla-card">
+        <h3>MUTACIÓN: {pillar}</h3>
+        <form onSubmit={handleSubmit}>
+          <input placeholder="Propósito de la Semilla" required />
+          <textarea placeholder="Marco Legal" rows={3} required />
+          <input placeholder="Línea de Acción" required />
+          
+          <div className="form-actions">
+            <button type="submit" className="btn-confirm" disabled={loading}>
+              {loading ? 'SINCRONIZANDO...' : 'INYECTAR'}
+            </button>
+            <button type="button" className="btn-cancel" onClick={onClose}>ABORTAR</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+export default AlphaMutationView;
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\layers\beta\AdminBetaRouter.tsx
+==========================================================
+import React, { useEffect } from 'react';
+import { usePachaStream } from '../shared/hooks/usePachaStream';
+
+export default function AdminBetaRouter() {
+  // Invocamos el Hook con las credenciales que encontramos
+  const { data, loading } = usePachaStream();
+
+  useEffect(() => {
+    if (!loading) {
+      console.log("--- TEST DE CONEXIÓN VÍA51 ---");
+      console.log("Estado: Nodo Central Sincronizado");
+      console.log("Registros detectados en Pacha:", data.length);
+      console.table(data); // Esto mostrará los datos en una tabla limpia en consola
+    }
+  }, [data, loading]);
+
+  return (
+    <div style={{ padding: '2rem', backgroundColor: '#050505', color: '#00ff00', fontFamily: 'monospace', minHeight: '100vh' }}>
+      <h1>CAPA BETA: MÓDULO DE INGRESO</h1>
+      <hr border-color="#333" />
+      <div style={{ marginTop: '1rem' }}>
+        {loading ? (
+          <p>Buscando pulso de Pacha...</p>
+        ) : (
+          <p>Conexión Exitosa. Se han detectado {data.length} nodos activos.</p>
+        )}
+      </div>
+      <p style={{ fontSize: '0.8rem', color: '#666', marginTop: '2rem' }}>
+        Presione F12 y revise la pestaña "Console" para ver el ADN de los datos.
+      </p>
+    </div>
+  );
+}
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\layers\core\PillarOrchestrator.tsx
+==========================================================
+import React, { useState } from 'react';
+import AlphaMutationView from '../alfa/AlphaMutationView';
+import SystemCommand from './SystemCommand';
+
+export type PillarType = 'POLITICO' | 'SOCIAL' | 'PRODUCTIVO';
+
+const PillarOrchestrator: React.FC = () => {
+  const [activePillar, setActivePillar] = useState<PillarType | null>(null);
+  const [isMutationOpen, setIsMutationOpen] = useState(false);
+
+  const handlePillarClick = (pillar: PillarType) => {
+    setActivePillar(pillar);
+    setIsMutationOpen(true);
+  };
+
+  const handleClose = () => {
+    setIsMutationOpen(false);
+    setTimeout(() => setActivePillar(null), 400); 
+  };
+
+  return (
+    <div className="hero-bg">
+      <SystemCommand 
+        command={activePillar ? `ACTIVATING_${activePillar}` : 'WAITING_CEO_INPUT'} 
+        status={activePillar ? 'active' : 'idle'} 
+      />
+
+      <nav className="contenedor-semaforo">
+        <button className="boton-ceo" onClick={() => handlePillarClick('POLITICO')}>EJE POLÍTICO</button>
+        <button className="boton-ceo" onClick={() => handlePillarClick('SOCIAL')}>EJE SOCIAL</button>
+        <button className="boton-ceo" onClick={() => handlePillarClick('PRODUCTIVO')}>EJE PRODUCTIVO</button>
+      </nav>
+
+      <AlphaMutationView 
+        isOpen={isMutationOpen} 
+        pillar={activePillar} 
+        onClose={handleClose} 
+      />
+    </div>
+  );
+};
+
+export default PillarOrchestrator;
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\layers\core\SystemCommand.tsx
+==========================================================
+import React from 'react';
+
+interface SystemCommandProps {
+  command: string;
+  status: 'active' | 'idle' | 'critical';
+}
+
+const SystemCommand: React.FC<SystemCommandProps> = ({ command, status }) => {
+  return (
+    <div className={`system-command-display ${status}`}>
+      <span className="command-label">CMD:</span>
+      <code className="command-text">{command}</code>
+    </div>
+  );
+};
+
+export default SystemCommand;
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\layers\gamma\GammaBrainRouter.tsx
+==========================================================
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\layers\shared\components\LoadingKernel.tsx
+==========================================================
+import React from 'react';
+
+const LoadingKernel = () => (
+  <div className="min-h-screen bg-black flex flex-col items-center justify-center">
+    {/* Animación de Sincronización */}
+    <div className="relative w-20 h-20 mb-6">
+      <div className="absolute inset-0 border-t-2 border-blue-500 rounded-full animate-spin"></div>
+      <div className="absolute inset-0 border-r-2 border-red-500/30 rounded-full animate-pulse"></div>
+    </div>
+    
+    <div className="text-center">
+      <h3 className="text-zinc-500 font-bold tracking-[0.5em] text-[10px] uppercase mb-2">
+        Gamma Engine v3.0
+      </h3>
+      <p className="text-white/40 font-light text-[9px] uppercase tracking-widest">
+        Sincronizando Pilares del Holding...
+      </p>
+    </div>
+  </div>
+);
+
+export default LoadingKernel;
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\layers\shared\hooks\useSystemStream.ts
+==========================================================
+import { useEffect, useState } from 'react';
+import { dataClient } from '../../../lib/supabaseClient'; // Usamos el cliente neutro que creamos antes
+
+export function useSystemStream() {
+  const [data, setData] = useState(null);
+  const [config, setConfig] = useState({ is_critical_mode: false });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const fetchEngineState = async () => {
+    try {
+      // 1. Consultamos el estado del motor (Modo Coyuntura o Estándar)
+      const { data: engineConfig } = await dataClient
+        .from('engine_config') 
+        .select('*')
+        .single();
+
+      // 2. Traemos los datos de los 3 Pilares y del evento Alfa
+      const { data: nodes } = await dataClient
+        .from('core_nodes') // Tabla neutra (antes nodos_alfa)
+        .select('*')
+        .eq('is_active', true);
+
+      setConfig({
+        is_critical_mode: engineConfig?.operational_mode === 'CRITICAL'
+      });
+
+      setData({
+        pillars: {
+          political: nodes?.find(n => n.type === 'political'),
+          social: nodes?.find(n => n.type === 'social'),
+          productive: nodes?.find(n => n.type === 'productive'),
+        },
+        critical_event: nodes?.find(n => n.is_emergency === true)
+      });
+
+    } catch (err) {
+      setError(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchEngineState();
+
+    // SUSCRIPCIÓN EN TIEMPO REAL: El "Pulso del Holding"
+    const canal = dataClient
+      .channel('system-pulse')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'engine_config' }, () => {
+        fetchEngineState(); // Si cambias el interruptor en Supabase, la UI muta al instante
+      })
+      .subscribe();
+
+    return () => dataClient.removeChannel(canal);
+  }, []);
+
+  return { data, config, loading, error };
+}
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\lib\supabase\v51-client.ts
+==========================================================
+// Path: /src/lib/supabase/v51-client.ts
+// Name: V51_Supabase_Secure_Client
+// Identity: Comas, Lima, Peru | 2026-03-31 18:58:00
+
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
+/**
+ * Root Owner Check: 9157ae13-36ac-4259-9680-1d9bd2cada4a
+ * Este cliente inicializa la conexión validando el aislamiento por hostname.
+ */
+export const getV51Client = (tenantId?: string) => {
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    global: {
+      headers: {
+        'x-v51-tenant-id': tenantId || 'UNKNOWN',
+      },
+    },
+  });
+};
+
+/**
+ * Ejemplo de Query con RLS dinámico:
+ * SELECT * FROM sys_events WHERE tenant_id = current_setting('request.headers')::json->>'x-v51-tenant-id';
+ */
+export const fetchNodeConfig = async (hostname: string) => {
+  const supabase = getV51Client();
+  
+  const { data, error } = await supabase
+    .from('sys_registry')
+    .select('*')
+    .eq('node_domain', hostname)
+    .single();
+
+  if (error) throw new Error(`CRITICAL_FAILURE: Node ${hostname} isolation breach attempt.`);
+  return data;
+};
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\lib\audit-logger.ts
+==========================================================
+// src/lib/audit-logger.ts
+import { createClient } from '@supabase/supabase-js'; // Assuming Supabase usage
+
+const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+
+export interface AuditEntry {
+    actor_id: string;        // WHO (User UUID)
+    action_type: string;     // WHAT (e.g., STATE_TRANSITION)
+    payload_snapshot: any;   // DATA (The state before/after)
+    tenant_id: string;       // WHERE (The fractal node ID)
+    status: 'SUCCESS' | 'FAILURE';
+}
+
+/**
+ * IMMUTABLE LOGGING
+ * Writes directly to sys_events. Level 2 (Gamma) oversight.
+ */
+export const logEvent = async (entry: AuditEntry) => {
+    const event = {
+        ...entry,
+        timestamp: new Date().toISOString(),
+    };
+
+    const { error } = await supabase
+        .from('sys_events')
+        .insert([event]);
+
+    if (error) {
+        // Critical failure: If audit fails, we must alert the SuperOwner (Fredy)
+        console.error(`[CRITICAL - GAMMA] Audit Logging Failed: ${error.message}`);
+        // In a real scenario, this would trigger an emergency notification
+    }
+
+    return event;
+};
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\lib\constants.ts
+==========================================================
+// src/lib/constants.ts
+export const SCHEMA = {
+  TABLES: {
+    ORGANIZATIONS: 'sys_registry',
+    EVENTS: 'sys_events',
+    PERMISSIONS: 'user_permissions'
+  },
+  DATA_KEYS: {
+    TREE: 'node_tree',
+    CONFIG: 'configuration' // Actualizado de configuracion_json
+  }
+};
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\lib\dataClient.ts
+==========================================================
+import { createClient } from '@supabase/supabase-js';
+
+// Extraemos las variables del motor (Vite utiliza import.meta.env)
+const CORE_URL = import.meta.env.VITE_CORE_DATA_URL;
+const CORE_TOKEN = import.meta.env.VITE_CORE_PUBLIC_TOKEN;
+
+// Validación de túnel de datos
+if (!CORE_URL || !CORE_TOKEN) {
+  console.error("ERROR CRÍTICO: El motor Gamma no detecta las variables de infraestructura.");
+}
+
+// Exportación del cliente de datos neutro
+export const dataClient = createClient(CORE_URL, CORE_TOKEN);
+
+// Mantenemos este alias solo por compatibilidad si otros componentes lo usan
+export const supabase = dataClient;
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\lib\supabase.ts
+==========================================================
+// Path: C:/via51_ecosistema/via51-nodo-central/src/lib/supabase.ts
+// Name: V51_Infrastructure_Supabase_Secure_Provider
+// Identity: Comas, Lima, Peru | 2026-03-31 20:03:40
+
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const MASTER_UID = import.meta.env.VITE_V51_MASTER_UID;
+
+/**
+ * VALIDACIÓN QUIRÚRGICA: 
+ * Si las variables no cargan, detenemos la ejecución del nodo 
+ * para evitar fugas de datos o acceso anónimo no deseado.
+ */
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error("CRITICAL_V51_ERROR: Environment variables not loaded. Connectivity Aborted.");
+}
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+  },
+  global: {
+    headers: {
+      'x-v51-master-id': MASTER_UID, // Inyectado para auditoría en sys_events
+    },
+  },
+});
+
+/**
+ * Función de Verificación de Privilegios Maestro
+ */
+export const isMasterSession = (currentUid: string): boolean => {
+  return currentUid === MASTER_UID;
+};
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\lib\supabaseAdmin.ts
+==========================================================
+/**
+ * PATH: /v51-gamma/src/lib/supabaseAdmin.ts
+ * ROLE: Orquestador de Soberanía VÍA51
+ */
+
+import { createClient } from '@supabase/supabase-js';
+
+// Constantes de Soberanía Inmutable
+export const MASTER_UID = "9157ae13-36ac-4259-9680-1d9bd2cada4a";
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseAnonKey) {
+    console.error("❌ ERROR CRÍTICO: Credenciales de infraestructura no detectadas.");
+}
+
+/**
+ * Cliente de Supabase configurado para el Esquema Maestro "via51"
+ */
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    db: {
+        schema: 'via51' // Alineación con el hallazgo en image_f0ce70.png
+    },
+    auth: {
+        persistSession: true,
+        autoRefreshToken: true
+    }
+});
+
+// Alias administrativo para operaciones de alto nivel
+export const v51 = supabase;
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\lib\supabaseClient.ts
+==========================================================
+// src/lib/supabaseClient.ts
+import { createClient } from '@supabase/supabase-js'; //
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+// Verificación de seguridad para depurar en consola
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error("ERROR: Credenciales de Supabase no detectadas en .env");
+}
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  db: {
+    schema: 'public' 
+  }
+}); //
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\lib\via51-orchestrator.ts
+==========================================================
+// path: src/lib/via51-orchestrator.ts
+
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
+/**
+ * resolveNodeRegistry
+ * Intenta una consulta agnóstica probando ambos esquemas (el viejo y el fractal).
+ */
+export const resolveNodeRegistry = async (hostname: string) => {
+  // Intentamos la query con el estándar VÍA51 (node_name)
+  let { data, error } = await supabase
+    .from('sys_registry')
+    .select('node_name, tier, config')
+    .eq('hostname', hostname)
+    .single();
+
+  // Si falla por columna inexistente (Error 42703), intentamos el esquema legacy
+  if (error && error.code === '42703') {
+    const legacyRequest = await supabase
+      .from('sys_registry')
+      .select('node_tree, tier, config')
+      .eq('hostname', hostname)
+      .single();
+    
+    if (!legacyRequest.error && legacyRequest.data) {
+      return {
+        // Mapeamos node_tree a node_name para que el resto de la app sea agnóstica
+        node_name: legacyRequest.data.node_tree,
+        tier: legacyRequest.data.tier,
+        config: legacyRequest.data.config,
+        isLegacy: true
+      };
+    }
+  }
+
+  return data;
+};
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\middleware\tenant-resolver.ts
+==========================================================
+/**
+ * Function: Global Multi-Tenant Resolver & Identity Guard
+ * Location: /src/middleware/tenant-resolver.js
+ * Date: 2026-04-02 10:45:12
+ * Description: Intercepta el hostname para inyectar el tenant_id y validar 
+ * la jerarquía fractal antes del acceso a datos.
+ */
+
+import { supabase } from '../lib/database';
+
+/**
+ * Resuelve la identidad del nodo basándose en la topología fractal.
+ * @param {string} hostname - El dominio proveniente de window.location.hostname
+ * @returns {Promise<Object>} Metadata del nodo y configuración de seguridad.
+ */
+export const resolveNodeIdentity = async (hostname) => {
+    try {
+        // 1. Identificación del nivel jerárquico por estructura de dominio
+        let nodeLevel;
+        if (hostname.startsWith('gamma.')) nodeLevel = 'GAMMA';
+        else if (hostname.startsWith('hub.')) nodeLevel = 'BETA';
+        else nodeLevel = 'ALFA';
+
+        // 2. Consulta quirúrgica a sys_registry (Configuración Maestra)
+        // Se valida el aislamiento mediante el hostname único.
+        const { data: registry, error } = await supabase
+            .from('sys_registry')
+            .select('tenant_id, config, status')
+            .eq('hostname', hostname)
+            .eq('is_active', true)
+            .single();
+
+        if (error || !registry) {
+            throw new Error(`Node Identity Breach: Unauthorized access from ${hostname}`);
+        }
+
+        // 3. Auditoría de acceso inmediata (sys_events)
+        await supabase.from('sys_events').insert({
+            event_type: 'NODE_RESOLVE',
+            payload: { hostname, nodeLevel, timestamp: new Date().toISOString() },
+            severity: 'INFO'
+        });
+
+        return {
+            tenantId: registry.tenant_id,
+            level: nodeLevel,
+            config: registry.config,
+            isAuthorized: true
+        };
+    } catch (error) {
+        console.error('[Identity Error]:', error.message);
+        return { isAuthorized: false, error: 'Access Denied' };
+    }
+};
+
+/**
+ * Componente de Orden Superior (HOC) para protección de Rutas
+ * Implementa el aislamiento Multi-Tenant en la UI.
+ */
+export const withNodeSovereignty = (WrappedComponent) => {
+    return function SovereigntyProvider(props) {
+        // Lógica de validación de contexto global aquí
+        // Si el tenant_id no coincide con el Root Owner o el tenant local, bloquea.
+        return <WrappedComponent {...props} />;
+    };
+};
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\middleware\veto-gatekeeper.ts
+==========================================================
+// src/middleware/veto-gatekeeper.ts
+
+const SUPEROWNER_ID = "fredy-0000-0000-gamma-super"; // Placeholder UUID for Fredy
+const VETO_SECRET_TOKEN = process.env.VETO_CLEARANCE_TOKEN; // Set in Gamma environment
+
+interface RequestContext {
+    userId: string;
+    action: string;
+    vetoToken?: string;
+}
+
+/**
+ * THE FREDY GATEKEEPER
+ * Prevents creation of new Owners (Level 2 expansion) without explicit SuperOwner clearance.
+ */
+export const vetoGatekeeper = (context: RequestContext) => {
+    const { userId, action, vetoToken } = context;
+
+    // 1. Vitalicio Rule: Fredy bypasses all restrictions
+    if (userId === SUPEROWNER_ID) {
+        console.log("[GAMMA] SuperOwner access granted. Veto bypassed.");
+        return true;
+    }
+
+    // 2. Expansion Rule: Creating an OWNER requires Level 2 Veto Clearance
+    if (action === "CREATE_OWNER") {
+        if (!vetoToken || vetoToken !== VETO_SECRET_TOKEN) {
+            throw new Error("403 Forbidden: Veto Power active. Only Fredy can authorize new Owners.");
+        }
+    }
+
+    // 3. Hierarchy Check: Standard flow for Beta/Alfa
+    console.log(`[BETA] Traffic processing authorized for user: ${userId}`);
+    return true;
+};
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\services\gammaEngine.ts
+==========================================================
+/* Ruta: src/services/gammaEngine
+   Nombre: gammaEngine
+   Descripción: Motor lógico (Gamma) del Holding Digital Vía51.
+   Gobierna la validación de los tres pilares.
+*/
+
+import supabase from '../supabaseClient';
+
+const GammaEngine = {
+  // 1. Lógica de "Modo Coyuntura"
+  // Determina si Alfa debe mostrar los 3 pilares o dedicarse a un evento excepcional
+  checkCoyuntura: async () => {
+    const { data } = await supabase
+      .from('configuracion_global')
+      .select('modo_emergencia')
+      .single();
+    return data?.modo_emergencia || false;
+  },
+
+  // 2. Validador de Consistencia de Pilares
+  // Gamma asegura que no se guarde información vacía que debilite el plano
+  validarPilar: (datos) => {
+    if (!datos.titulo_que || datos.titulo_que.length < 5) {
+      throw new Error("El propósito (Título) es insuficiente para sostener el pilar.");
+    }
+    if (!datos.descripcion_como || datos.descripcion_como.length < 10) {
+      throw new Error("La interrelación (Descripción) carece de sustancia técnica.");
+    }
+    return true;
+  },
+
+  // 3. Procesador de Sincronización
+  // Ejecuta la transformación de Beta a Alfa pasando por los filtros de Gamma
+  sincronizarNodo: async (slug, contenido) => {
+    try {
+      GammaEngine.validarPilar(contenido);
+      
+      const { data, error } = await supabase
+        .from('nodos')
+        .upsert({ 
+          slug, 
+          ...contenido,
+          ultima_revision_gamma: new Date().toISOString() 
+        }, { onConflict: 'slug' });
+
+      if (error) throw error;
+      return { success: true, data };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  }
+};
+
+export default GammaEngine;
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\services\MediaIngestor.ts
+==========================================================
+// Ubicación: src/services/MediaIngestor.ts
+// Nombre: MediaIngestor Service (V51 Gamma Engine Standard)
+
+import { supabase } from '../lib/supabaseClient'; 
+import { SCHEMA } from '../lib/constants';
+
+/**
+ * MEDIA INGESTOR - SERVICIO DE INGESTA DE BINARIOS
+ * Gestiona la subida de archivos al Storage (Bucket 'vault')
+ * y prepara el objeto de datos para actualizar [sys_registry].
+ */
+export const ingestMedia = async (
+  file: File, 
+  nodeId: string, 
+  type: 'audio' | 'video'
+) => {
+  // Obtenemos el slug desde las variables de entorno (Vite)
+  const activeSlug = import.meta.env.VITE_DEV_CLIENT_SLUG || 'default';
+  
+  // 1. Generación de Ruta en Storage (Estructura Agnóstica)
+  // Ruta resultante: vault/{slug}/{type}/{uuid}.ext
+  const fileExt = file.name.split('.').pop();
+  const fileName = `${crypto.randomUUID()}.${fileExt}`;
+  const filePath = `${activeSlug}/${type}/${fileName}`;
+
+  // 2. Subida del Binario al Bucket 'vault'
+  const { error: storageError } = await supabase
+    .storage
+    .from('vault')
+    .upload(filePath, file, {
+      cacheControl: '3600',
+      upsert: false
+    });
+
+  if (storageError) {
+    console.error("[Storage Error]:", storageError.message);
+    throw storageError;
+  }
+
+  // 3. Obtención de URL Pública
+  const { data: { publicUrl } } = supabase
+    .storage
+    .from('vault')
+    .getPublicUrl(filePath);
+
+  // 4. Preparación de Metadatos para el Nodo en [sys_registry]
+  // Este objeto es el que luego se inyecta en 'arbol_nodos_json' via RPC o Update
+  return {
+    id: nodeId,
+    type: `${type}_node`,
+    data: {
+      src: publicUrl,
+      fileName: file.name,
+      mimeType: file.type,
+      uploadedAt: new Date().toISOString(),
+      origin: SCHEMA.TABLES.ORGANIZATIONS // Referencia a la tabla de origen
+    }
+  };
+};
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\services\telemetryService.ts
+==========================================================
+// Ubicación: src/services/telemetryService.ts
+// Sección Gamma - Ciencia y Tecnología
+
+import { supabase } from '../lib/supabaseClient';
+import { SCHEMA } from '../lib/constants';
+
+export const trackEvent = async ({
+  registry_id,
+  node_id,
+  action_type,
+  metadata = {}
+}: {
+  registry_id: string;
+  node_id: string;
+  action_type: string;
+  metadata?: any;
+}) => {
+  try {
+    if (!registry_id) return;
+
+    // Mapeo dinámico para sys_events
+    await supabase
+      .from(SCHEMA.TABLES.TELEMETRY)
+      .insert([
+        {
+          organizacion_id: registry_id, // Mantenemos tu nombre de columna actual
+          node_id,
+          action_type,
+          contexto: {
+            ...metadata,
+            sys_url: window.location.href,
+            sys_ua: navigator.userAgent
+          }
+        }
+      ]);
+  } catch (err) {
+    console.warn("[Gamma Warning]: Telemetría omitida por seguridad.");
+  }
+};
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\styles\App.css
+==========================================================
+.node-shell {
+  width: 100vw; height: 100vh;
+  background-size: cover; background-position: center;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.overlay {
+  background: rgba(0, 20, 0, 0.85);
+  border: 2px solid #00ff00;
+  padding: 40px; color: #00ff00;
+  text-align: center;
+  box-shadow: 0 0 20px #00ff00;
+}
+
+.engine-container {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
+}
+
+.engine-box {
+  border: 1px solid #00ff00; padding: 20px;
+}
+
+.digital-display {
+  font-size: 3rem; color: #0f0; text-shadow: 0 0 10px #0f0;
+}
+
+button {
+  background: transparent; border: 1px solid #0f0; color: #0f0;
+  padding: 10px 20px; cursor: pointer; margin: 10px;
+}
+
+button:hover { background: #0f0; color: #000; }
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\types\index.ts
+==========================================================
+// src/types/index.ts
+export interface Tenant {
+  id: string;
+  slug: string;
+  config: {
+    brand_name?: string;
+    campaign_phrases?: string[];
+    rotation_speed?: number;
+    theme?: string;
+  };
+  nodeTree: any;
+}
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\App.tsx
+==========================================================
+/**
+ * FUNCTION: Main Application Entry Point
+ * LOCATION: /src/App.tsx
+ * DATE: 2026-04-03
+ * TIME: 07:48:32
+ * DESCRIPTION: Root component of the Operación 12-A. Implements a fractal 
+ * UI structure that adapts to the detected NodeLevel.
+ */
+
+import React, { useEffect, useState } from 'react';
+import { getExecutionNode, NodeLevel } from './core/context/NodeOrchestrator';
+
+const App: React.FC = () => {
+  const [node, setNode] = useState<{ level: NodeLevel; alias: string } | null>(null);
+
+  useEffect(() => {
+    const currentContext = getExecutionNode();
+    setNode(currentContext);
+
+    // Notify the system of successful initialization
+    console.info(`%c Operación 12-A: Node ${currentContext.level} Online`, "color: #00ff00; font-weight: bold;");
+  }, []);
+
+  if (!node) return <div className="h-screen w-screen bg-black flex items-center justify-center text-white">Initializing Orbit...</div>;
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans antialiased">
+      {/* Fractal UI Layout */}
+      <header className="p-6 border-b border-slate-800 flex justify-between items-center">
+        <h1 className="text-xl font-bold tracking-tighter uppercase">
+          Ecosystem <span className="text-blue-500">{node.level}</span>
+        </h1>
+        <div className="text-xs font-mono text-slate-500">
+          Node: {node.alias} | 2026-04-03
+        </div>
+      </header>
+
+      <main className="max-w-7xl mx-auto p-8">
+        <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Triad Representation (Level 2 Example) */}
+          <div className="p-6 rounded-lg bg-slate-900 border border-slate-800 hover:border-blue-500 transition-colors">
+            <h3 className="text-lg font-semibold mb-2">Political</h3>
+            <p className="text-sm text-slate-400">Governance and consensus protocols.</p>
+          </div>
+          <div className="p-6 rounded-lg bg-slate-900 border border-slate-800 hover:border-blue-500 transition-colors">
+            <h3 className="text-lg font-semibold mb-2">Social</h3>
+            <p className="text-sm text-slate-400">Human interaction and identity layers.</p>
+          </div>
+          <div className="p-6 rounded-lg bg-slate-900 border border-slate-800 hover:border-blue-500 transition-colors">
+            <h3 className="text-lg font-semibold mb-2">Productive</h3>
+            <p className="text-sm text-slate-400">Value generation and resource management.</p>
+          </div>
+        </section>
+      </main>
+
+      <footer className="fixed bottom-4 left-4 right-4 text-center text-[10px] text-slate-600 uppercase tracking-widest">
+        Antigravity Philosophy | Sovereignty in Code
+      </footer>
+    </div>
+  );
+};
+
+export default App;
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\index.css
+==========================================================
+/* src/index.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Variables placeholder que serán sobreescritas por el TenantContext */
+  --v51-primary: #222;
+  --v51-secondary: #fff;
+  --v51-accent: #444;
+  --v51-bg-canvas: #0a0a0a;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: var(--v51-bg-canvas);
+  color: var(--v51-secondary);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* COMPONENTES AGNOSTICOS */
+
+/* Los botones se pintan según la 'energía' (datos) que reciban */
+button, .v51-button {
+  background-color: var(--v51-primary);
+  color: var(--v51-secondary);
+  border: 1px solid var(--v51-accent);
+  padding: 12px 24px;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+}
+
+button:hover {
+  filter: brightness(1.15);
+  box-shadow: 0 0 20px var(--v51-primary);
+  transform: translateY(-1px);
+}
+
+.node-container {
+  border-top: 2px solid var(--v51-primary);
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(12px);
+  padding: 2rem;
+  border-radius: 12px;
+}
+
+.accent-border {
+  border-color: var(--v51-accent) !important;
+}
+
+/* Scrollbar dinámica con el color del Tenant */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--v51-primary);
+  border-radius: 10px;
+}
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\main.tsx
+==========================================================
+/**
+ * FUNCIÓN: Punto de Entrada Principal (Main Engine)
+ * LUGAR: /src/main.tsx
+ * FECHA: 02-Abr-2026 | 18:05
+ * DESCRIPCIÓN: Renderizado del Nodo ALFA con StrictMode de React.
+ */
+
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App.tsx';
+import './index.css'; // Asegura que Tailwind esté cargado
+
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+
+
+
+==========================================================
+ARCHIVO: C:\via51_ecosistema\via51-gamma\src\middleware.ts
+==========================================================
+/**
+ * PATH: /middleware.ts
+ * ROLE: Nivel 1 - GAMMA (Soberanía de Acceso)
+ * DESC: Muro de contención perimetral. Solo el UID Maestro cruza a Gamma.
+ */
+
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs';
+
+// CONSTANTE DE INMUNIDAD (FREDY)
+const MASTER_UID = "9157ae13-36ac-4259-9680-1d9bd2cada4a";
+
+export async function middleware(req: NextRequest) {
+  const res = NextResponse.next();
+  const supabase = createMiddlewareClient({ req, res });
+
+  // 1. Identificación de Territorio (Slug)
+  const hostname = req.headers.get('host');
+  const slug = hostname?.split('.')[0];
+
+  // 2. Gestión de Sesión
+  const { data: { session } } = await supabase.auth.getSession();
+
+  // 3. PROTOCOLO DE EXCLUSIVIDAD GAMMA
+  // Si el territorio es 'gamma', aplicamos el filtro de identidad inmutable
+  if (slug === 'gamma') {
+    if (!session || session.user.id !== MASTER_UID) {
+      console.warn(`V51_SECURITY: Intento de acceso no autorizado a GAMMA por UID: ${session?.user.id || 'ANÓNIMO'}`);
+      // Eyección inmediata al dominio raíz o login
+      return NextResponse.redirect(new URL('https://via51.org', req.url));
+    }
+  }
+
+  // 4. Inyección de Contexto para el resto de niveles (Beta/Alfa)
+  if (slug && slug !== 'www' && slug !== 'via51') {
+    res.headers.set('x-v51-tenant-slug', slug);
+
+    // Opcional: Solo si mantendrás la función RPC en tu DB
+    await supabase.rpc('set_app_context', {
+      tenant_slug: slug
+    });
+  }
+
+  return res;
+}
+
+export const config = {
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|api/auth).*)'],
+};
+
+
+

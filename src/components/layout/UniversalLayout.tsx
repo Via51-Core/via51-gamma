@@ -1,13 +1,17 @@
 /**
  * FUNCIÓN: Contenedor Maestro Universal (Mobile-First)
- * LUGAR: /components/layout/UniversalLayout.jsx
- * FECHA: 02-Abr-2026 | 15:40
- * DESCRIPCIÓN: Implementa la estética de "Puente de Escucha" con paleta azul cobalto.
+ * LUGAR: /src/components/layout/UniversalLayout.tsx
+ * IDENTIDAD: V51-CORE | 03-Abr-2026
+ * DESCRIPCIÓN: Implementa la estética de "Puente de Escucha" (Cobalto/Limpio).
  */
 
-import React from 'react';
+import React, { ReactNode } from 'react';
 
-const UniversalLayout = ({ children }) => {
+interface LayoutProps {
+    children: ReactNode;
+}
+
+const UniversalLayout: React.FC<LayoutProps> = ({ children }) => {
     return (
         <div className="min-h-screen bg-slate-50 flex justify-center items-start antialiased font-sans">
             {/* Contenedor tipo App: Centrado en PC, Full width en Móvil */}
@@ -32,6 +36,7 @@ const UniversalLayout = ({ children }) => {
                     <p className="text-[11px] text-slate-300 uppercase tracking-widest font-medium">
                         Infraestructura de Escucha Ciudadana
                     </p>
+                    <p className="text-[9px] text-slate-200 mt-1 font-mono">V51.6_BETA_DEPLOY</p>
                 </footer>
             </main>
         </div>

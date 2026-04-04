@@ -1,7 +1,13 @@
+/**
+ * FUNCTION: Global Compiler Configuration
+ * LOCATION: /root/tsconfig.json
+ * DATE: 2026-04-03
+ * TIME: 07:48:32
+ * DESCRIPTION: Defines the structural constraints for the Antigravity ecosystem.
+ * Removes deprecated flags and enforces strict type checking for production.
+ */
 {
     "compilerOptions": {
-        "noImplicitAny": false,
-        "suppressImplicitAnyIndexErrors": true
         "target": "ESNext",
         "useDefineForClassFields": true,
         "lib": [
@@ -11,7 +17,7 @@
         ],
         "allowJs": false,
         "skipLibCheck": true,
-        "esModuleInterop": false,
+        "esModuleInterop": true,
         "allowSyntheticDefaultImports": true,
         "strict": true,
         "forceConsistentCasingInFileNames": true,
@@ -29,10 +35,7 @@
         }
     },
     "include": [
-        "src",
-        "middleware.ts",
-        "views",
-        "components"
+        "src"
     ],
     "references": [
         {

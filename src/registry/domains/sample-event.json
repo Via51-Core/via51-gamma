@@ -1,0 +1,33 @@
+{
+    "domain_id": "events_v1",
+    "meta": {
+        "entity_name": "Event",
+        "description": "Configuration for Concerts and Congresses"
+    },
+    "requiredFields": [
+        "title",
+        "capacity",
+        "is_public"
+    ],
+    "properties": {
+        "title": {
+            "type": "string",
+            "min": 5
+        },
+        "capacity": {
+            "type": "number",
+            "max_limit": 10000
+        },
+        "is_public": {
+            "type": "boolean"
+        },
+        "metadata": {
+            "type": "object"
+        }
+    },
+    "transitions": [
+        "draft -> processing",
+        "processing -> approved",
+        "approved -> published"
+    ]
+}
