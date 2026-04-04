@@ -7,39 +7,43 @@
  * Removes deprecated flags and enforces strict type checking for production.
  */
 {
-    "compilerOptions": {
-        "target": "ESNext",
-        "useDefineForClassFields": true,
-        "lib": [
-            "DOM",
-            "DOM.Iterable",
-            "ESNext"
-        ],
-        "allowJs": false,
-        "skipLibCheck": true,
-        "esModuleInterop": true,
-        "allowSyntheticDefaultImports": true,
-        "strict": true,
-        "forceConsistentCasingInFileNames": true,
-        "module": "ESNext",
-        "moduleResolution": "Node",
-        "resolveJsonModule": true,
-        "isolatedModules": true,
-        "noEmit": true,
-        "jsx": "react-jsx",
-        "baseUrl": ".",
-        "paths": {
-            "@/*": [
-                "src/*"
-            ]
-        }
-    },
-    "include": [
-        "src"
-    ],
-    "references": [
-        {
-            "path": "./tsconfig.node.json"
-        }
-    ]
+  "compilerOptions": {
+    "target": "ESNext",
+    "useDefineForClassFields": true,
+    "lib": ["DOM", "DOM.Iterable", "ESNext"],
+    "allowJs": false,
+    "skipLibCheck": true,
+    "esModuleInterop": false,
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "module": "ESNext",
+    "moduleResolution": "Node",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+
+    /* --- CONFIGURACIÓN DE SOBERANÍA DE RUTAS (VÍA51) --- */
+    "baseUrl": ".", 
+    "paths": {
+      /* Capa ALFA: Interfaz de Captura / Vistas Públicas */
+      "@alfa/*": ["src/layers/alfa/*"],
+      
+      /* Capa BETA: HUB de Control / Lógica, Hooks y Servicios */
+      "@beta/*": ["src/layers/beta/*"],
+      
+      /* Capa GAMMA: Cerebro del Sistema / Configuración y Soberanía del Dato */
+      "@gamma/*": ["src/layers/gamma/*"],
+      
+      /* Capa UI: Componentes Atómicos / Primitivas Visuales Inmutables */
+      "@ui/*": ["src/layers/ui/*"],
+      
+      /* Acceso directo a activos estáticos (Imágenes, Logos) */
+      "@assets/*": ["public/assets/*"]
+    }
+    /* -------------------------------------------------- */
+  },
+  "include": ["src"],
+  "references": [{ "path": "./tsconfig.node.json" }]
 }

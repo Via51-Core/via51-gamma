@@ -1,74 +1,79 @@
 /**
- * RUTA: src/layers/ui/V51_Visor_Animado.tsx
- * LUGAR: Comas, Lima, Perú
- * FECHA: 2026-04-04 | HORA: 13:30
- * INTENCIÓN: Activo del CORE - Visor Universal Adaptativo.
+ * UI COMPONENT: V51_Visor_Animado
+ * Función: Renderizado cíclico de activos visuales con transiciones suaves.
+ * Capa: UI (Componente Atómico)
  */
 
 import React, { useState, useEffect } from 'react';
 
-interface V51VisorProps {
+interface VisorProps {
     slides: string[];
     frasePrincipal: string;
     fraseSecundaria: string;
     posicion?: 'left' | 'center' | 'right';
 }
 
-// IMPORTANTE: El nombre debe coincidir exactamente con la importación en App.tsx
-export const V51_Visor_Animado: React.FC<V51VisorProps> = ({
+export const V51_Visor_Animado: React.FC<VisorProps> = ({
     slides,
     frasePrincipal,
     fraseSecundaria,
     posicion = 'center'
 }) => {
-    const [currentSlide, setCurrentSlide] = useState(0);
+    const [index, setIndex] = useState(0);
 
+    // Ciclo de transición automática
     useEffect(() => {
         const timer = setInterval(() => {
-            setCurrentSlide((prev) => (prev + 1) % slides.length);
+            setIndex((prev) => (prev + 1) % slides.length);
         }, 5000);
         return () => clearInterval(timer);
-    }, [slides]);
-
-    const justifyConfig = {
-        left: 'justify-start',
-        center: 'justify-center',
-        right: 'justify-end'
-    };
+    }, [slides.length]);
 
     return (
-        <div className={`flex h-screen w-full bg-[#050505] items-center p-4 md:p-12 ${justifyConfig[posicion]}`}>
-
-            {/* Luz de Respiración (Efecto de profundidad) */}
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-[#0047AB]/10 via-transparent to-transparent pointer-events-none" />
-
-            {/* CELULAR CENTRADO */}
-            <div className="relative h-full aspect-[9/16] max-h-[85vh] bg-black shadow-[0_0_80px_rgba(0,71,171,0.4)] rounded-[3rem] border-[10px] border-zinc-900 overflow-hidden z-20">
-                {slides.map((img, i) => (
+        <div className="relative w-full h-full bg-black overflow-hidden">
+            {/* 1. CAPA DE IMAGEN (Soberanía Visual) */}
+            {slides.map((img, i) => (
+                <div
+                    key={i}
+                    className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${i === index ? 'opacity-100' : 'opacity-0'
+                        }`}
+                >
                     <img
-                        key={img}
                         src={img}
-                        className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ${i === currentSlide ? 'opacity-100' : 'opacity-0'}`}
+                        alt={`Slide ${i}`}
+                        className="w-full h-full object-cover"
                     />
-                ))}
-
-                {/* Marquee para Mobile */}
-                <div className="absolute bottom-0 w-full bg-black/80 backdrop-blur-md py-4 lg:hidden">
-                    <p className="animate-marquee-loop text-white text-[10px] tracking-widest uppercase">
-                        {fraseSecundaria} • {fraseSecundaria}
-                    </p>
+                    {/* Overlay de profundidad para legibilidad */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20" />
                 </div>
-            </div>
+            ))}
 
-            {/* TEXTOS LATERALES (Configurables por el Orquestador) */}
-            <aside className="hidden lg:flex flex-col px-12 z-30 max-w-md">
-                <h2 className="text-white text-4xl font-light border-l-4 border-[#0047AB] pl-6 mb-4 animate-reveal-right">
+            {/* 2. CAPA DE TEXTO (Capa Alfa inyectada) */}
+            <div className={`absolute bottom-20 w-full px-10 flex flex-col z-10 
+        ${posicion === 'center' ? 'items-center text-center' :
+                    posicion === 'left' ? 'items-start text-left' : 'items-end text-right'}`}>
+
+                <h2 className="text-white text-2xl font-bold tracking-tighter leading-none mb-2 uppercase italic">
                     {frasePrincipal}
                 </h2>
-                <p className="text-white/40 font-mono text-xs uppercase tracking-[0.5em]">
-                    Vía51 • Soberanía Tecnológica
+
+                <div className="h-[2px] w-12 bg-v51-cobalt mb-3" />
+
+                <p className="text-zinc-400 text-xs font-mono tracking-widest uppercase">
+                    {fraseSecundaria}
                 </p>
-            </aside>
+            </div>
+
+            {/* 3. INDICADORES FRACTALES */}
+            <div className="absolute bottom-8 w-full flex justify-center gap-2 z-10">
+                {slides.map((_, i) => (
+                    <div
+                        key={i}
+                        className={`h-[2px] transition-all duration-500 ${i === index ? 'w-8 bg-v51-cobalt' : 'w-2 bg-zinc-700'
+                            }`}
+                    />
+                ))}
+            </div>
         </div>
     );
 };
